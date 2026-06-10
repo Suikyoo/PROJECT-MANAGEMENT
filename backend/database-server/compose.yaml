@@ -1,0 +1,16 @@
+services:
+  database:
+    env_file: ../.env
+    image: postgres:16
+    container_name: inscribing-ceremony-db
+    #environment:
+    #POSTGRES_DB: "${DB_NAME}"
+    #POSTGRES_USER: "${DB_USER}"
+    #POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    volumes:
+      - inscribing-ceremony-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+
+volumes:
+  inscribing-ceremony-data:
