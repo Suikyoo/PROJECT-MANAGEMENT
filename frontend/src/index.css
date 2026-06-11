@@ -1,1 +1,43 @@
 @import 'tailwindcss';
+@import 'prosemirror-view/style/prosemirror.css';
+
+/* Native form elements in dark mode */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  color-scheme: light;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* Tiptap Editor Styles */
+.ProseMirror {
+  min-height: 200px;
+  outline: none;
+  padding: 0;
+}
+.ProseMirror p {
+  margin: 0.5em 0;
+}
+.ProseMirror h1 { font-size: 1.5em; font-weight: 700; margin: 0.5em 0; }
+.ProseMirror h2 { font-size: 1.25em; font-weight: 600; margin: 0.5em 0; }
+.ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.5em 0; }
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.ProseMirror ul, .ProseMirror ol {
+  padding-left: 1.5em;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid #3F3F46;
+  padding-left: 1em;
+  margin-left: 0;
+  color: #A1A1AA;
+}

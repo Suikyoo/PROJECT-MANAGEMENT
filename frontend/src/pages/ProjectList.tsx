@@ -1,14 +1,16 @@
 // ~/src/pages/ProjectList.tsx
-import { For, createSignal } from 'solid-js';
+import { For, createSignal, createResource } from 'solid-js';
 import { useParams } from '@solidjs/router';
 import { getActiveProject } from '../lib/store';
+import { getTasksByProject, type Task } from '../lib/fetch';
 
 export default function ProjectList() {
   const params = useParams();
+  const projectId = () => Number(params.id);
   const [filter, setFilter] = createSignal<string>('All');
   
-  const project = () => getActiveProject(params.id);
-  const flattenedTasks = () => project()?.phases.flatMap(ph => ph.tasks) || [];
+  const project = () => getActiveProject(projectId());
+  const [allTasks] = createResource(projectId, getTasksByProject);
 
   return (
     <div class="bg-[#121214] rounded-lg border border-[#1F1F23] p-4">
@@ -35,7 +37,7 @@ export default function ProjectList() {
             </tr>
           </thead>
           <tbody class="divide-y divide-[#1F1F23]">
-            <For each={flattenedTasks().filter(t => filter() === 'All' || t.state === filter())}>{(task) => (
+            <For each={(allTasks() || []).filter(t => filter() === 'All' || t.state === filter())}>{(task) => (
               <tr class="text-zinc-300 hover:bg-[#1A1A1E] transition-colors">
                 <td class="p-3 font-medium text-white max-w-xs truncate">{task.title}</td>
                 <td class="p-3">

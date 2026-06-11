@@ -1,7 +1,8 @@
 // ~/src/App.tsx
 import { JSX } from 'solid-js';
 import { A, useLocation, useParams } from '@solidjs/router';
-import { store, currentUser, setCurrentUser, getActiveProject } from './lib/store';
+import { session, getProjectById } from './lib/store';
+import { Zap, Folder, BarChart3, Columns3, List, Calendar } from 'lucide-solid';
 import "./index.css"
 
 export default function App(props: { children?: JSX.Element }) {
@@ -9,7 +10,7 @@ export default function App(props: { children?: JSX.Element }) {
   const params = useParams();
 
   const isProjectView = () => location.pathname.startsWith('/project/');
-  const activeProject = () => getActiveProject(params.id);
+  const activeProject = () => params.id ? getProjectById(Number(params.id)) : undefined;
 
   return (
     <div class="flex bg-[#0B0B0C] text-zinc-300 min-h-screen font-sans">
@@ -19,14 +20,14 @@ export default function App(props: { children?: JSX.Element }) {
         <div>
           {/* Logo Brand */}
           <A href="/" class="flex items-center gap-2 p-2 mb-6 no-underline text-white">
-            <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center font-bold text-xs">⚡</div>
+            <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Zap size={12} /></div>
             <span class="font-bold text-base tracking-wide">Orbit</span>
           </A>
 
           {/* Navigation Links */}
           <div class="flex flex-col gap-1">
             <A href="/" class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === '/' ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-              📁 All Projects
+              <Folder size={16} /> All Projects
             </A>
             
             {isProjectView() && (
@@ -36,32 +37,23 @@ export default function App(props: { children?: JSX.Element }) {
                   {activeProject()?.name}
                 </p>
                 <A href={`/project/${params.id}`} end class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/project/${params.id}` ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                  📊 Dashboard
+                  <BarChart3 size={16} /> Dashboard
                 </A>
                 <A href={`/project/${params.id}/board`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname.endsWith('/board') ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                  📋 Kanban Board
+                  <Columns3 size={16} /> Kanban Board
                 </A>
                 <A href={`/project/${params.id}/list`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname.endsWith('/list') ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                  📝 Structural List
+                  <List size={16} /> Structural List
                 </A>
               </>
             )}
           </div>
         </div>
 
-        {/* IDENTITY SIMULATOR Pinned Bottom Left */}
         <div class="bg-[#1A1A1E] p-3 rounded-lg border border-[#27272A]">
-          <label class="block text-[11px] text-zinc-500 mb-1.5 font-semibold tracking-wider uppercase">Simulated Identity</label>
-          <select 
-            value={currentUser().id}
-            onChange={(e) => {
-              const matched = store.users.find(u => u.id === e.currentTarget.value);
-              if (matched) setCurrentUser(matched);
-            }}
-            class="w-full bg-[#121214] text-white border border-[#3F3F46] p-1.5 rounded text-xs focus:outline-none focus:border-zinc-500 cursor-pointer"
-          >
-            {store.users.map((u) => <option value={u.id} class="bg-[#121214]">{u.name} ({u.role})</option>)}
-          </select>
+          <p class="text-[11px] text-zinc-500 mb-1 font-semibold tracking-wider uppercase">Signed in as</p>
+          <p class="text-xs text-white font-medium">{session()?.name ?? 'Guest'}</p>
+          <p class="text-[10px] text-zinc-500">{session()?.role ?? 'Not logged in'}</p>
         </div>
       </aside>
 
@@ -71,7 +63,7 @@ export default function App(props: { children?: JSX.Element }) {
           <div class="text-xs md:text-sm text-zinc-400 truncate">
             Workspace / <span class="text-white font-medium">{activeProject() ? activeProject()?.name : 'Portfolio Overview'}</span>
           </div>
-          <div class="text-xs text-zinc-500 font-medium">📅 Jun 10, 2026</div>
+          <div class="text-xs text-zinc-500 font-medium flex items-center gap-1"><Calendar size={14} /> Jun 10, 2026</div>
         </header>
         
         <main class="p-6 flex-1 overflow-y-auto">

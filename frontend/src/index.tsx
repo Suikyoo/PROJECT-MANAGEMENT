@@ -1,39 +1,24 @@
-/* @refresh reload */
-/*
-import './index.css';
-import { render } from 'solid-js/web';
-import 'solid-devtools';
-
-import App from './App';
-
-const root = document.getElementById('root');
-
-if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
-  throw new Error(
-    'Root element not found. Did you forget to add it to your index.html? Or maybe the id attribute got misspelled?',
-  );
-}
-
-render(() => <App />, root!);
-
-*/ 
-
 // ~/src/index.tsx
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
-import App from './App';
-import ProjectsEntry from './pages/ProjectsEntry';
-import ProjectDashboard from './pages/ProjectDashboard';
-import ProjectBoard from './pages/ProjectBoard';
-import ProjectList from './pages/ProjectList';
+import ClientPage from './pages/ClientPage';
+import InsiderLogin from './pages/InsiderLogin';
+import InsiderLayout from './pages/InsiderLayout';
+import InsiderProjects from './pages/InsiderProjects';
+import InsiderProjectView from './pages/InsiderProjectView';
+import AdminPage from './pages/AdminPage';
+import "./index.css"
 
 render(
   () => (
-    <Router root={App}>
-      <Route path="/" component={ProjectsEntry} />
-      <Route path="/project/:id" component={ProjectDashboard} />
-      <Route path="/project/:id/board" component={ProjectBoard} />
-      <Route path="/project/:id/list" component={ProjectList} />
+    <Router>
+      <Route path="/" component={ClientPage} />
+      <Route path="/insider/login" component={InsiderLogin} />
+      <Route path="/insider" component={InsiderLayout}>
+        <Route path="/" component={InsiderProjects} />
+        <Route path="/project/:id" component={InsiderProjectView} />
+      </Route>
+      <Route path="/admin" component={AdminPage} />
     </Router>
   ),
   document.getElementById('root')!

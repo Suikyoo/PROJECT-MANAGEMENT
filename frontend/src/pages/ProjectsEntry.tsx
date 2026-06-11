@@ -28,7 +28,6 @@ export default function ProjectsEntry() {
             <p class="text-xs text-zinc-500 mb-4 line-clamp-2 leading-relaxed">{project.description}</p>
             
             <div class="text-[11px] text-zinc-400 border-t border-[#1F1F23] pt-3 flex justify-between items-center">
-              <span>Phases: {project.phases.length}</span>
               <span class="text-blue-400 text-xs font-medium">Open Blueprint →</span>
             </div>
           </div>

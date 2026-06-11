@@ -1,18 +1,18 @@
-import { dataTable, studentsTable, tagsTable } from "../lib/db/schema.ts";
 import { db } from "../lib/db/index.ts";
+import { commentTable, taskTable, phaseTable, projectTable, userTable } from "../lib/db/schema.ts";
 
-export async function clear() {
-
-
-  await db.delete(tagsTable);
-  console.log("tags table cleared");
-
-  await db.delete(dataTable);
-  console.log("data table cleared");
-
-  await db.delete(studentsTable);
-  console.log("students table cleared");
+async function clear() {
+  console.log("🧹 Clearing database...");
+  await db.delete(commentTable);
+  await db.delete(taskTable);
+  await db.delete(phaseTable);
+  await db.delete(projectTable);
+  await db.delete(userTable);
+  console.log("✅ Cleared all data!");
+  process.exit(0);
 }
 
-await clear();
-await db.$client.end();
+clear().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
