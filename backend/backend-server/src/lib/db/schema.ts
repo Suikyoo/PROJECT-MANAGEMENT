@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, bigint, uuid } from "drizzle-orm/pg-core";
 
 export const projectTable = pgTable('projects', {
 	id: serial('id').primaryKey(),
@@ -36,7 +36,7 @@ export const taskTable = pgTable('tasks', {
   state: text("state").notNull().default("backlog"),
 });
 
-export const commentTable = pgTable('comments', {
+export const feedbackTable = pgTable('feedback', {
   id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
   userId: integer("user_id").references(() => userTable.id).notNull(),
@@ -48,4 +48,17 @@ export const logTable = pgTable('logs', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').references(() => projectTable.id).notNull().unique(),
   content: text('content').notNull().default(''),
+});
+
+export const tokenTable = pgTable('tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  dateIssued: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+  expiry: bigint('expiry', { mode: 'number' }).notNull(),
+});
+
+export const accessTable = pgTable('access', {
+  id: serial('id').primaryKey(),
+  tokenId: uuid('token_id').references(() => tokenTable.id).notNull(),
+  projectId: integer('project_id').references(() => projectTable.id).notNull(),
 });

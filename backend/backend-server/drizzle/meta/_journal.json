@@ -15,6 +15,20 @@
       "when": 1781179379811,
       "tag": "0001_sticky_rhodey",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781262667637,
+      "tag": "0002_tough_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781281687432,
+      "tag": "0003_charming_talos",
+      "breakpoints": true
     }
   ]
 }

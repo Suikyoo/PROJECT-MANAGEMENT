@@ -1,6 +1,6 @@
 // ~/src/lib/fetch.ts
 
-export type Role = 'Supervisor' | 'QA' | 'Developer' | 'Client';
+export type Role = 'Supervisor' | 'QA' | 'Developer';
 export type TaskState = 'backlog' | 'in-progress' | 'to review' | 'QA approved';
 export type PhaseState = 'UAT' | 'Complete';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
@@ -39,7 +39,7 @@ export interface Project {
   description: string;
 }
 
-export interface Comment {
+export interface Feedback {
   id: number;
   phaseId: number;
   userId: number;
@@ -149,12 +149,12 @@ export const submitTask = (taskId: number) =>
 export const approveTask = (taskId: number) =>
   api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' });
 
-// Comments
-export const getCommentsByPhase = (phaseId: number) =>
-  api<Comment[]>('/phases/' + phaseId + '/comments');
+// Feedbacks
+export const getFeedbacksByPhase = (phaseId: number) =>
+  api<Feedback[]>('/phases/' + phaseId + '/feedbacks');
 
-export const createComment = (phaseId: number, content: string) =>
-  api<Comment>('/phases/' + phaseId + '/comments', {
+export const createFeedback = (phaseId: number, content: string) =>
+  api<Feedback>('/phases/' + phaseId + '/feedbacks', {
     method: 'POST',
     body: JSON.stringify({ content }),
   });
@@ -184,6 +184,50 @@ export const setProjectLog = (projectId: number, content: string) =>
     body: JSON.stringify({ content }),
   });
 
+// ---- Client token API (prefix /token/) ----
+const TOKEN_BASE = '/api/token';
+
+async function tokenApi<T>(url: string, tokenId: string, options?: RequestInit): Promise<T> {
+  const body = { token: tokenId };
+  const mergedOptions = options?.body ? {
+    ...options,
+    body: JSON.stringify({ ...body, ...JSON.parse(options.body as string) }),
+  } : { ...options, body: JSON.stringify(body) };
+  const res = await fetch(`${TOKEN_BASE}${url}`, {
+    credentials: 'include',
+    method: "POST",
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...mergedOptions,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    console.log(`failed: ${TOKEN_BASE}${url}`)
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export const tokenGetProjects = (tokenId: string) =>
+  tokenApi<Project[]>('/projects', tokenId);
+
+export const tokenGetProject = (tokenId: string, projectId: number) =>
+  tokenApi<Project[]>('/projects/' + projectId, tokenId);
+
+export const tokenGetPhasesByProject = (tokenId: string, projectId: number) =>
+  tokenApi<Phase[]>('/projects/' + projectId + '/phases', tokenId);
+
+export const tokenGetTasksByProject = (tokenId: string, projectId: number) =>
+  tokenApi<Task[]>('/projects/' + projectId + '/tasks', tokenId);
+
+export const tokenGetTasksByPhase = (tokenId: string, phaseId: number) =>
+  tokenApi<Task[]>('/phases/' + phaseId + '/tasks', tokenId);
+
+export const tokenGetFeedbacksByPhase = (tokenId: string, phaseId: number) =>
+  tokenApi<Feedback[]>('/phases/' + phaseId + '/feedbacks', tokenId);
+
+export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
+  tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);
+
 // Admin
 export const getUsers = () =>
   api<User[]>('/admin/users');
@@ -202,3 +246,44 @@ export const setUserRole = (userId: number, role: Role) =>
     method: 'POST',
     body: JSON.stringify({ role }),
   });
+
+export const deleteUser = (userId: number) =>
+  api<User[]>('/admin/users/' + userId, { method: 'DELETE' });
+
+// Admin: token management
+export interface Token {
+  id: string;
+  name: string;
+  dateIssued: string;
+  expiry: number;
+}
+
+export interface Access {
+  id: number;
+  tokenId: string;
+  projectId: number;
+}
+
+export const getTokens = () =>
+  api<Token[]>('/admin/tokens');
+
+export const createToken = (name: string, expiry: number) =>
+  api<Token>('/admin/tokens', {
+    method: 'POST',
+    body: JSON.stringify({ name, expiry }),
+  });
+
+export const deleteToken = (tokenId: string) =>
+  api<Token[]>('/admin/tokens/' + tokenId, { method: 'DELETE' });
+
+export const getTokenAccess = (tokenId: string) =>
+  api<Access[]>('/admin/tokens/' + tokenId + '/access');
+
+export const createTokenAccess = (tokenId: string, projectId: number) =>
+  api<Access>('/admin/tokens/' + tokenId + '/access', {
+    method: 'POST',
+    body: JSON.stringify({ projectId }),
+  });
+
+export const deleteTokenAccess = (tokenId: string, projectId: number) =>
+  api<Access[]>('/admin/tokens/' + tokenId + '/access/' + projectId, { method: 'DELETE' });

@@ -1,5 +1,5 @@
 import { db } from "../lib/db/index.ts";
-import { projectTable, phaseTable, userTable, taskTable, commentTable } from "../lib/db/schema.ts";
+import { projectTable, phaseTable, userTable, taskTable, feedbackTable } from "../lib/db/schema.ts";
 import bcrypt from "bcryptjs";
 
 async function seed() {
@@ -11,7 +11,7 @@ async function seed() {
   const users = await db.insert(userTable).values([
     { name: "Alex Chen", username: "alex", passwordHash: hash, role: "Developer", approved: "approved" },
     { name: "Priya Sharma", username: "priya", passwordHash: hash, role: "QA", approved: "approved" },
-    { name: "Diana Osei", username: "diana", passwordHash: hash, role: "Client", approved: "approved" },
+    { name: "Diana Osei", username: "diana", passwordHash: hash, role: "Developer", approved: "approved" },
     { name: "Marcus Webb", username: "marcus", passwordHash: hash, role: "Supervisor", approved: "approved" },
   ]).returning();
 
@@ -47,8 +47,8 @@ async function seed() {
     { phaseId: phase2.id, supervisorId: marcus.id, title: "API rate limiting", description: "Enforce depth limiters and token buckets.", state: "QA approved", developerId: alex.id, start: new Date("2026-06-05"), end: new Date("2026-06-12") },
   ]);
 
-  // Create a sample comment
-  await db.insert(commentTable).values([
+  // Create a sample feedback
+  await db.insert(feedbackTable).values([
     { phaseId: phase1.id, userId: diana.id, content: "Architecture looks solid. Please ensure the auth gateway handles token expiry gracefully." },
   ]);
 
