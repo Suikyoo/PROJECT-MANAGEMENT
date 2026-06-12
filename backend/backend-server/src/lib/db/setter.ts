@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "./index.ts";
-import { projectTable, phaseTable, userTable, taskTable, commentTable, logTable } from "./schema.ts";
+import { projectTable, phaseTable, userTable, taskTable, feedbackTable, logTable, tokenTable, accessTable } from "./schema.ts";
 import type { TaskState, Role, ApprovalStatus } from "./enums.ts";
 
 // --- User setters ---
@@ -98,10 +98,10 @@ export async function approveTask(taskId: number) {
     .returning();
 }
 
-// --- Comment setters ---
+// --- Feedback setters ---
 
-export async function createComment(phaseId: number, userId: number, content: string) {
-  const result = await db.insert(commentTable).values({
+export async function createFeedback(phaseId: number, userId: number, content: string) {
+  const result = await db.insert(feedbackTable).values({
     phaseId,
     userId,
     content,
@@ -121,4 +121,37 @@ export async function upsertProjectLog(projectId: number, content: string) {
   }
   const result = await db.insert(logTable).values({ projectId, content }).returning();
   return result[0];
+}
+
+// --- Token / Access setters ---
+
+export async function createToken(name: string, expiry: number) {
+  const result = await db.insert(tokenTable).values({
+    name,
+    expiry,
+  }).returning();
+  return result[0];
+}
+
+export async function createAccess(tokenId: string, projectId: number) {
+  const result = await db.insert(accessTable).values({
+    tokenId,
+    projectId,
+  }).returning();
+  return result[0];
+}
+
+export async function deleteToken(tokenId: string) {
+  await db.delete(accessTable).where(eq(accessTable.tokenId, tokenId));
+  return await db.delete(tokenTable).where(eq(tokenTable.id, tokenId)).returning();
+}
+
+export async function deleteAccess(tokenId: string, projectId: number) {
+  return await db.delete(accessTable)
+    .where(and(eq(accessTable.tokenId, tokenId), eq(accessTable.projectId, projectId)))
+    .returning();
+}
+
+export async function deleteUser(userId: number) {
+  return await db.delete(userTable).where(eq(userTable.id, userId)).returning();
 }

@@ -1,6 +1,6 @@
 import { eq, type InferSelectModel } from "drizzle-orm";
 import { db } from "./index.ts";
-import { phaseTable, userTable, projectTable, taskTable, commentTable, logTable } from "./schema.ts";
+import { phaseTable, userTable, projectTable, taskTable, feedbackTable, logTable, tokenTable, accessTable } from "./schema.ts";
 
 export async function getProjects(): Promise<InferSelectModel<typeof projectTable>[]> {
   return await db.select().from(projectTable);
@@ -47,17 +47,57 @@ export async function getTaskById(id: number): Promise<InferSelectModel<typeof t
   return await db.select().from(taskTable).where(eq(taskTable.id, id));
 }
 
-export async function getCommentsByPhaseId(phaseId: number): Promise<InferSelectModel<typeof commentTable>[]> {
-  return await db.select().from(commentTable).where(eq(commentTable.phaseId, phaseId));
+export async function getFeedbacksByPhaseId(phaseId: number): Promise<InferSelectModel<typeof feedbackTable>[]> {
+  return await db.select().from(feedbackTable).where(eq(feedbackTable.phaseId, phaseId));
 }
 
 export async function getTasksByProjectId(projectId: number): Promise<InferSelectModel<typeof taskTable>[]> {
-  return await db.select(taskTable).from(taskTable)
-    .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
-    .where(eq(phaseTable.projectId, projectId));
+  return await db.select({
+    id: taskTable.id,
+    phaseId: taskTable.phaseId,
+    supervisorId: taskTable.supervisorId,
+    developerId: taskTable.developerId,
+    title: taskTable.title,
+    description: taskTable.description,
+    start: taskTable.start,
+    end: taskTable.end,
+    state: taskTable.state,
+  })
+  .from(taskTable)
+  .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
+  .where(eq(phaseTable.projectId, projectId));
 }
 
 export async function getProjectLog(projectId: number): Promise<InferSelectModel<typeof logTable> | undefined> {
   const result = await db.select().from(logTable).where(eq(logTable.projectId, projectId));
   return result[0];
+}
+
+// --- Token / Access ---
+
+export async function getTokenById(id: string): Promise<InferSelectModel<typeof tokenTable> | undefined> {
+  const result = await db.select().from(tokenTable).where(eq(tokenTable.id, id));
+  return result[0];
+}
+
+export async function getAllTokens(): Promise<InferSelectModel<typeof tokenTable>[]> {
+  return await db.select().from(tokenTable);
+}
+
+export async function getAllowedProjectsByTokenId(id: string): Promise<InferSelectModel<typeof projectTable>[]> {
+  return await db
+    .select({
+      id: projectTable.id,
+      name: projectTable.name,
+      state: projectTable.state,
+      description: projectTable.description,
+    })
+    .from(projectTable)
+    .innerJoin(accessTable, eq(accessTable.projectId, projectTable.id))
+    .innerJoin(tokenTable, eq(tokenTable.id, accessTable.tokenId))
+    .where(eq(tokenTable.id, id));
+}
+
+export async function getAccessByTokenId(tokenId: string): Promise<InferSelectModel<typeof accessTable>[]> {
+  return await db.select().from(accessTable).where(eq(accessTable.tokenId, tokenId));
 }

@@ -4,7 +4,7 @@ import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import { getProjects, logout, type Project } from '../lib/fetch';
 import { session, sessionLoading, setSession, refreshProjects, getProjectById } from '../lib/store';
-import { Zap, Folder, BarChart3, Columns3, List } from 'lucide-solid';
+import { Zap, Folder, BarChart3, Columns3 } from 'lucide-solid';
 
 export default function InsiderLayout(props: { children?: JSX.Element }) {
   const navigate = useNavigate();
@@ -55,11 +55,8 @@ export default function InsiderLayout(props: { children?: JSX.Element }) {
               <A href={`/insider/project/${params.id}`} end class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}` ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
                 <BarChart3 size={16} /> Dashboard
               </A>
-              <A href={`/insider/project/${params.id}?view=board`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}` && new URLSearchParams(location.search).get('view') === 'board' ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                <Columns3 size={16} /> Kanban Board
-              </A>
-              <A href={`/insider/project/${params.id}?view=list`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}` && new URLSearchParams(location.search).get('view') === 'list' ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                <List size={16} /> Structural List
+              <A href={`/insider/project/${params.id}/tasks`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}/tasks` || location.pathname.startsWith(`/insider/project/${params.id}/tasks`) ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                <Columns3 size={16} /> Tasks
               </A>
             </Show>
           </div>

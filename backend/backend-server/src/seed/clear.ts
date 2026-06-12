@@ -1,9 +1,9 @@
 import { db } from "../lib/db/index.ts";
-import { commentTable, taskTable, phaseTable, projectTable, userTable } from "../lib/db/schema.ts";
+import { feedbackTable, taskTable, phaseTable, projectTable, userTable } from "../lib/db/schema.ts";
 
 async function clear() {
   console.log("🧹 Clearing database...");
-  await db.delete(commentTable);
+  await db.delete(feedbackTable);
   await db.delete(taskTable);
   await db.delete(phaseTable);
   await db.delete(projectTable);

@@ -1,62 +1,22 @@
-// ~/src/pages/InsiderProjectView.tsx
-import { For, Show, createSignal, createResource, createMemo, createEffect, onCleanup } from 'solid-js';
+// ~/src/pages/ProjectView.tsx
+import { For, Show, createSignal, createResource, createMemo } from 'solid-js';
 import { useParams, useSearchParams } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByPhase, createPhase, createTask,
-  acceptTask, submitTask, approveTask, togglePhaseState,
-  getProjectLog, setProjectLog, uploadImage,
-  type Phase, type Task, type TaskState, type PhaseState
+  acceptTask, submitTask, approveTask,
+  type Phase, type Task, type TaskState,
 } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
-import { Editor } from '@tiptap/core';
-import { StarterKit } from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
-import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon } from 'lucide-solid';
 
-export default function InsiderProjectView() {
+export default function ProjectView() {
   const params = useParams();
   const [searchParams] = useSearchParams();
-  const projectId = () => Number(params.id);
-  const view = () => (searchParams.view as string) || 'dashboard';
+  const projectId = () => Number(params.project_id);
+  const view = () => (searchParams.view as string) || 'board';
 
   const [phases, { refetch: refetchPhases }] = createResource(projectId, getPhasesByProject);
   const [tasksByPhase, setTasksByPhase] = createSignal<Record<number, Task[]>>({});
   const [error, setError] = createSignal('');
-
-  let editor_ref!: HTMLDivElement;
-  const [editor, setEditor] = createSignal<Editor>();
-  const [logSaving, setLogSaving] = createSignal(false);
-
-  createEffect(() => {
-    if (!showEditLog()) return;
-
-    const el = editor_ref;
-    if (!el) return;
-
-    const instance = new Editor({
-      element: el,
-      extensions: [
-        StarterKit.configure({
-          heading: { levels: [1, 2, 3] },
-        }),
-        Image,
-      ],
-      content: `<p>Loading...</p>`,
-    });
-
-    setEditor(instance);
-
-    // Load existing log content
-    getProjectLog(projectId()).then(log => {
-      if (log.content) {
-        instance.commands.setContent(log.content);
-      } else {
-        instance.commands.setContent(`<p>Example Text</p>`);
-      }
-    })
-
-    onCleanup(() => instance.destroy());
-  });
 
   // Phase tasks loading
   const loadTasks = async (phaseId: number) => {
@@ -84,12 +44,10 @@ export default function InsiderProjectView() {
   const isSupervisor = () => role() === 'Supervisor';
   const isDeveloper = () => role() === 'Developer';
   const isQA = () => role() === 'QA';
-  const isClient = () => role() === 'Client';
-  const userId = () => session()?.userId || 0;
 
   // --- Create Phase Modal ---
   const [showCreatePhase, setShowCreatePhase] = createSignal(false);
-  const [showEditLog, setShowEditLog] = createSignal(false);
+
   const [phaseName, setPhaseName] = createSignal('');
   const [phaseLoading, setPhaseLoading] = createSignal(false);
 
@@ -97,8 +55,7 @@ export default function InsiderProjectView() {
     e.preventDefault();
     setPhaseLoading(true);
     try {
-      await createPhase(projectId(), phaseName());
-      setShowCreatePhase(false);
+      await createPhase(projectId(), phaseName()); setShowCreatePhase(false);
       setPhaseName('');
       refetchPhases();
       refreshProjects();
@@ -185,69 +142,7 @@ export default function InsiderProjectView() {
     }
   };
 
-  const handleTogglePhase = async (phaseId: number) => {
-    try {
-      await togglePhaseState(phaseId);
-      refetchPhases();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed');
-    }
-  };
-
-  const handleSaveLog = async () => {
-    const ed = editor();
-    if (!ed) return;
-    setLogSaving(true);
-    try {
-      let html = ed.getHTML();
-
-      // Find and upload local images (data: URLs or blob: URLs)
-      const imgRegex = /<img[^>]+src="([^"]+)"/g;
-      const uploads: Promise<void>[] = [];
-      const replacements: { old: string; new: string }[] = [];
-
-      let match;
-      while ((match = imgRegex.exec(html)) !== null) {
-        const src = match[1];
-        // Skip already-uploaded images
-        if (src.startsWith('/images/')) continue;
-        // Handle data URLs (base64 images)
-        if (src.startsWith('data:')) {
-          const [header, data] = src.split(',');
-          const mime = header.split(':')[1]?.split(';')[0] || 'image/png';
-          const byteString = atob(data);
-          const ab = new ArrayBuffer(byteString.length);
-          const ia = new Uint8Array(ab);
-          for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-          const blob = new Blob([ab], { type: mime });
-          const ext = mime.split('/')[1] || 'png';
-          const file = new File([blob], `image.${ext}`, { type: mime });
-          const p = uploadImage(file).then(result => {
-            replacements.push({ old: src, new: result.url });
-          });
-          uploads.push(p);
-        }
-      }
-
-      await Promise.all(uploads);
-
-      // Apply replacements
-      for (const r of replacements) {
-        html = html.replaceAll(r.old, r.new);
-      }
-
-      console.log("ihi")
-      await setProjectLog(projectId(), html);
-      setShowEditLog(false);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save log');
-    } finally {
-      setLogSaving(false);
-    }
-
-      await refetchLog();
-  };
-
+  // Collect all tasks across phases for list view
   const getAllTasks = createMemo(() => {
     const all: (Task & { phaseId: number })[] = [];
     const p = phases();
@@ -274,7 +169,6 @@ export default function InsiderProjectView() {
     }));
   });
 
-  const [projectLog, {refetch: refetchLog}] = createResource(projectId, getProjectLog);
   
   return (
     <div class="max-w-5xl mx-auto">
@@ -285,25 +179,15 @@ export default function InsiderProjectView() {
           <p class="text-sm text-zinc-500">Manage delivery phases and their task pipelines.</p>
         </div>
         <Show when={isSupervisor()}>
-          <button onClick={() => {!showEditLog() && setShowCreatePhase(true)}} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">
+          <button onClick={() => setShowCreatePhase(true)} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">
             + New Phase
-          </button>
-          <button onClick={() => {!showCreatePhase() && setShowEditLog(true)}} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">
-            ... Edit Front Page
           </button>
         </Show>
       </div>
 
-      <Show when={projectLog()}>
-        <div class="bg-[#121214] border border-[#1F1F23] p-6 rounded-lg mb-8">
-          <h3 class="text-sm font-semibold uppercase text-zinc-400 tracking-wider mb-4">Project Log</h3>
-          <div class="prose prose-invert prose-sm max-w-none text-zinc-300 [&_img]:rounded-lg [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={projectLog()?.content} />
-        </div>
-      </Show>
-
       {/* View Switcher */}
       <div class="flex gap-1.5 mb-4 border-b border-[#1F1F23] pb-3">
-        <For each={['dashboard', 'board', 'list']}>{(v) => (
+        <For each={['board', 'list']}>{(v) => (
           <a
             href={`?view=${v}`}
             class={`py-1 px-3 rounded text-xs font-medium no-underline transition-colors border-none cursor-pointer ${view() === v ? 'bg-[#27272A] text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -312,42 +196,6 @@ export default function InsiderProjectView() {
           </a>
         )}</For>
       </div>
-
-      {/* DASHBOARD VIEW */}
-      <Show when={view() === 'dashboard'}>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div class="bg-[#121214] border border-[#1F1F23] p-4 rounded-lg">
-            <div class="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Total Tasks</div>
-            <div class="text-2xl font-bold mt-2 text-white">{getAllTasks().length}</div>
-          </div>
-          <div class="bg-[#121214] border border-[#1F1F23] p-4 rounded-lg">
-            <div class="text-xs text-blue-400 uppercase tracking-wider font-semibold">In Progress</div>
-            <div class="text-2xl font-bold mt-2 text-blue-400">{getAllTasks().filter(t => t.state === 'in-progress').length}</div>
-          </div>
-          <div class="bg-[#121214] border border-[#1F1F23] p-4 rounded-lg">
-            <div class="text-xs text-emerald-400 uppercase tracking-wider font-semibold">QA Approved</div>
-            <div class="text-2xl font-bold mt-2 text-emerald-400">{getAllTasks().filter(t => t.state === 'QA approved').length}</div>
-          </div>
-        </div>
-
-        <h3 class="text-sm font-semibold uppercase text-zinc-400 tracking-wider mb-4">Phases</h3>
-        <div class="flex flex-col gap-3">
-          <For each={phases()}>{(phase) => (
-            <div class="bg-[#121214] border border-[#1F1F23] p-4 rounded-lg flex flex-col sm:flex-row gap-4 justify-between sm:items-center">
-              <div>
-                <div class="flex items-center gap-3">
-                  <h4 class="font-medium text-white text-sm">{phase.name}</h4>
-                  <span class={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${phase.state === 'Complete' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>{phase.state}</span>
-                </div>
-                <p class="text-xs text-zinc-500 mt-1">{(tasksByPhase()[phase.id] || []).length} tasks</p>
-              </div>
-              <Show when={isClient()}>
-                <button onClick={() => handleTogglePhase(phase.id)} class="bg-[#27272A] border border-[#3F3F46] hover:bg-[#3F3F46] text-white text-xs py-1.5 px-3 rounded cursor-pointer transition-colors">Toggle State</button>
-              </Show>
-            </div>
-          )}</For>
-        </div>
-      </Show>
 
       {/* BOARD VIEW */}
       <Show when={view() === 'board'}>
@@ -450,92 +298,6 @@ export default function InsiderProjectView() {
           </div>
         </div>
       </Show>
-      <Show when={showEditLog()}>
-        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowEditLog(false)}>
-          <div class="bg-[#121214] border border-[#1F1F23] p-6 rounded-lg w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 class="text-lg font-semibold text-white mb-4">Edit Log</h3>
-
-            {/* Toolbar */}
-            <Show when={editor()}>
-              <div class="flex gap-1 mb-3 p-2 border border-[#3F3F46] rounded bg-[#0B0B0C] flex-wrap">
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('bold') }}
-                  onClick={() => editor()?.chain().toggleBold().focus().run()}
-                  title="Bold"
-                ><Bold size={16} /></button>
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('italic') }}
-                  onClick={() => editor()?.chain().toggleItalic().focus().run()}
-                  title="Italic"
-                ><Italic size={16} /></button>
-                <span class="w-px bg-[#3F3F46] mx-1" />
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 1 }) }}
-                  onClick={() => editor()?.chain().toggleHeading({ level: 1 }).focus().run()}
-                  title="Heading 1"
-                ><Heading1 size={16} /></button>
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 2 }) }}
-                  onClick={() => editor()?.chain().toggleHeading({ level: 2 }).focus().run()}
-                  title="Heading 2"
-                ><Heading2 size={16} /></button>
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 3 }) }}
-                  onClick={() => editor()?.chain().toggleHeading({ level: 3 }).focus().run()}
-                  title="Heading 3"
-                ><Heading3 size={16} /></button>
-                <span class="w-px bg-[#3F3F46] mx-1" />
-                <button
-                  type="button"
-                  class="p-1.5 text-zinc-300 rounded hover:bg-[#1F1F23] hover:text-white"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = async () => {
-                      const file = input.files?.[0];
-                      if (!file) return;
-                      try {
-                        const result = await uploadImage(file);
-                        editor()?.chain().setImage({ src: result.url }).focus().run();
-                      } catch {
-                        // Fallback: insert as data URL
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          editor()?.chain().setImage({ src: reader.result as string }).focus().run();
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    };
-                    input.click();
-                  }}
-                  title="Insert Image"
-                ><ImageIcon size={16} /></button>
-              </div>
-            </Show>
-
-            <div id="editor" ref={editor_ref} class="border border-[#3F3F46] rounded p-3 bg-[#0B0B0C] text-white min-h-[200px] max-h-[400px] overflow-y-auto" />
-
-            <div class="flex gap-2 justify-end mt-4">
-              <button type="button" onClick={() => setShowEditLog(false)} class="bg-transparent border border-[#3F3F46] text-zinc-400 text-sm px-4 py-2 rounded cursor-pointer hover:text-white">Cancel</button>
-              <button type="button" onClick={handleSaveLog} disabled={logSaving()} class="bg-white text-black font-semibold text-sm px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 disabled:opacity-50">
-                {logSaving() ? 'Saving...' : 'Save Log'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
       {/* CREATE TASK MODAL */}
       <Show when={showCreateTask()}>
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowCreateTask(false)}>

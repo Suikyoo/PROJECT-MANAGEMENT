@@ -1,5 +1,6 @@
 import type {RequestHandler} from "express"
 import { verifyToken } from "./index.ts";
+import { getTokenById } from "../db/getter.ts";
 
 declare global {
   namespace Express {
@@ -7,13 +8,15 @@ declare global {
       userId: number;
       role: string;
       username: string;
+      tokenId?: string;
+      allowedProjectIds?: number[];
     }
   }
 }
 
 // Block requests without valid JWT, extract payload into res.locals
 export const authorize: RequestHandler = async (req, res, next) => {
-  const authHead: string = req.cookies.inscriberCookie;
+  const authHead: string = req.cookies.taskCookie;
   if (!authHead) {
     return res.sendStatus(401);
   }
@@ -39,4 +42,27 @@ export const requireRole = (...roles: string[]): RequestHandler => {
     if (roles.includes(res.locals.role)) return next();
     return res.sendStatus(403);
   };
+};
+
+// Check if a client token is still valid (not expired)
+export async function isValidToken(id: string): Promise<boolean> {
+  const token = await getTokenById(id);
+  if (!token) return false;
+  const now = Date.now();
+  const issued = new Date(token.dateIssued).getTime();
+  return (now - issued) < token.expiry;
+}
+
+// Validate client token from req.body.token
+export const validate: RequestHandler = async (req, res, next) => {
+  const tokenId = req.body?.token || null;
+  if (!tokenId) {
+    return res.status(400).json({ error: "token required" });
+  }
+  const valid = await isValidToken(tokenId);
+  if (!valid) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+  res.locals.tokenId = tokenId;
+  next();
 };
