@@ -61,6 +61,7 @@ export const validate: RequestHandler = async (req, res, next) => {
   }
   const valid = await isValidToken(tokenId);
   if (!valid) {
+    console.log("token expired or invalid:", tokenId);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
   res.locals.tokenId = tokenId;

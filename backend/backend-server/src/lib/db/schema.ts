@@ -36,7 +36,15 @@ export const taskTable = pgTable('tasks', {
   state: text("state").notNull().default("backlog"),
 });
 
-export const feedbackTable = pgTable('feedback', {
+export const projectFeedbackTable = pgTable('project_feedback', {
+  id: serial('id').primaryKey(),
+  projectId: integer("project_id").references(() => projectTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
+export const phaseFeedbackTable = pgTable('phase_feedback', {
   id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
   userId: integer("user_id").references(() => userTable.id).notNull(),
@@ -44,9 +52,15 @@ export const feedbackTable = pgTable('feedback', {
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 
-export const logTable = pgTable('logs', {
+export const projectLogTable = pgTable('project_logs', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').references(() => projectTable.id).notNull().unique(),
+  content: text('content').notNull().default(''),
+});
+
+export const phaseLogTable = pgTable('phase_logs', {
+  id: serial('id').primaryKey(),
+  phaseId: integer('phase_id').references(() => phaseTable.id).notNull().unique(),
   content: text('content').notNull().default(''),
 });
 

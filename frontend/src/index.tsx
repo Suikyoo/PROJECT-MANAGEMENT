@@ -7,6 +7,7 @@ import InsiderLayout from './pages/InsiderLayout';
 import InsiderProjects from './pages/InsiderProjects';
 import DashBoardView from './pages/DashBoardView';
 import ProjectView from './pages/ProjectView';
+import PhaseView from './pages/PhaseView';
 import AdminLogin from './pages/AdminLogin';
 import AdminPage from './pages/AdminPage';
 import "./index.css"
@@ -21,6 +22,7 @@ render(
       <Route path="/client/:token_id" component={ClientLayout}>
         <Route path="/" component={ClientPage} />
         <Route path="/project/:project_id" component={() => <DashBoardView/>} />
+        <Route path="/project/:project_id/phase/:phase_id" component={() => <PhaseView/>} />
       </Route>
 
       <Route path="/insider" component={InsiderLayout}>
@@ -28,6 +30,7 @@ render(
         <Route path="/project/:project_id" component={ProjectLayout} >
           <Route path="/" component={DashBoardView} />
           <Route path="/tasks" component={ProjectView} />
+          <Route path="/phase/:phase_id" component={PhaseView} />
         </Route>
       </Route>
 

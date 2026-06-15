@@ -21,9 +21,19 @@
 
 # TODO
 
-- make a separate admin page (only admin login currently)
-- token based permissions instead of clients (still not sure about it)
+Create separate comments 
+Client: 
+
+- Clients must be able to view the Phase Log and Project Log 
+- Client can give feedback
+- Client Toggle (UAT -> Client-Approved): Project and Phase Separate 
+
+Insiders:
+
+- Project Log and Phase Log /
+- Project Priority
 - gannt view for ProjectView.tsx
+- managers can force assign to developers
 
 # DEBUG
 - phases in client's project dashboard doesn't load

@@ -39,7 +39,15 @@ export interface Project {
   description: string;
 }
 
-export interface Feedback {
+export interface ProjectFeedback {
+  id: number;
+  projectId: number;
+  userId: number;
+  content: string;
+  createdAt: string;
+}
+
+export interface PhaseFeedback {
   id: number;
   phaseId: number;
   userId: number;
@@ -50,6 +58,12 @@ export interface Feedback {
 export interface ProjectLog {
   id?: number;
   projectId: number;
+  content: string;
+}
+
+export interface PhaseLog {
+  id?: number;
+  phaseId: number;
   content: string;
 }
 
@@ -151,12 +165,22 @@ export const submitTask = (taskId: number) =>
 export const approveTask = (taskId: number) =>
   api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' });
 
-// Feedbacks
-export const getFeedbacksByPhase = (phaseId: number) =>
-  api<Feedback[]>('/phases/' + phaseId + '/feedbacks');
+// Feedbacks (Project)
+export const getProjectFeedbacks = (projectId: number) =>
+  api<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks');
 
-export const createFeedback = (phaseId: number, content: string) =>
-  api<Feedback>('/phases/' + phaseId + '/feedbacks', {
+export const createProjectFeedback = (projectId: number, content: string) =>
+  api<ProjectFeedback>('/projects/' + projectId + '/feedbacks', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+// Feedbacks (Phase)
+export const getPhaseFeedbacks = (phaseId: number) =>
+  api<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks');
+
+export const createPhaseFeedback = (phaseId: number, content: string) =>
+  api<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', {
     method: 'POST',
     body: JSON.stringify({ content }),
   });
@@ -182,6 +206,16 @@ export const getProjectLog = (projectId: number) =>
 
 export const setProjectLog = (projectId: number, content: string) =>
   api<ProjectLog>('/projects/' + projectId + '/log', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+// Phase Log
+export const getPhaseLog = (phaseId: number) =>
+  api<PhaseLog>('/phases/' + phaseId + '/log');
+
+export const setPhaseLog = (phaseId: number, content: string) =>
+  api<PhaseLog>('/phases/' + phaseId + '/log', {
     method: 'POST',
     body: JSON.stringify({ content }),
   });
@@ -225,10 +259,16 @@ export const tokenGetTasksByPhase = (tokenId: string, phaseId: number) =>
   tokenApi<Task[]>('/phases/' + phaseId + '/tasks', tokenId);
 
 export const tokenGetFeedbacksByPhase = (tokenId: string, phaseId: number) =>
-  tokenApi<Feedback[]>('/phases/' + phaseId + '/feedbacks', tokenId);
+  tokenApi<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks', tokenId);
+
+export const tokenGetFeedbacksByProject = (tokenId: string, projectId: number) =>
+  tokenApi<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks', tokenId);
 
 export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
   tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);
+
+export const tokenGetPhaseLog = (tokenId: string, phaseId: number) =>
+  tokenApi<PhaseLog>('/phases/' + phaseId + '/log', tokenId);
 
 // Admin
 export const getUsers = () =>

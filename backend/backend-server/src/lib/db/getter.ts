@@ -1,6 +1,6 @@
 import { eq, type InferSelectModel } from "drizzle-orm";
 import { db } from "./index.ts";
-import { phaseTable, userTable, projectTable, taskTable, feedbackTable, logTable, tokenTable, accessTable } from "./schema.ts";
+import { phaseTable, userTable, projectTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable } from "./schema.ts";
 
 export async function getProjects(): Promise<InferSelectModel<typeof projectTable>[]> {
   return await db.select().from(projectTable);
@@ -47,8 +47,12 @@ export async function getTaskById(id: number): Promise<InferSelectModel<typeof t
   return await db.select().from(taskTable).where(eq(taskTable.id, id));
 }
 
-export async function getFeedbacksByPhaseId(phaseId: number): Promise<InferSelectModel<typeof feedbackTable>[]> {
-  return await db.select().from(feedbackTable).where(eq(feedbackTable.phaseId, phaseId));
+export async function getProjectFeedbacksByProjectId(projectId: number): Promise<InferSelectModel<typeof projectFeedbackTable>[]> {
+  return await db.select().from(projectFeedbackTable).where(eq(projectFeedbackTable.projectId, projectId));
+}
+
+export async function getPhaseFeedbacksByPhaseId(phaseId: number): Promise<InferSelectModel<typeof phaseFeedbackTable>[]> {
+  return await db.select().from(phaseFeedbackTable).where(eq(phaseFeedbackTable.phaseId, phaseId));
 }
 
 export async function getTasksByProjectId(projectId: number): Promise<InferSelectModel<typeof taskTable>[]> {
@@ -68,8 +72,13 @@ export async function getTasksByProjectId(projectId: number): Promise<InferSelec
   .where(eq(phaseTable.projectId, projectId));
 }
 
-export async function getProjectLog(projectId: number): Promise<InferSelectModel<typeof logTable> | undefined> {
-  const result = await db.select().from(logTable).where(eq(logTable.projectId, projectId));
+export async function getProjectLog(projectId: number): Promise<InferSelectModel<typeof projectLogTable> | undefined> {
+  const result = await db.select().from(projectLogTable).where(eq(projectLogTable.projectId, projectId));
+  return result[0];
+}
+
+export async function getPhaseLog(phaseId: number): Promise<InferSelectModel<typeof phaseLogTable> | undefined> {
+  const result = await db.select().from(phaseLogTable).where(eq(phaseLogTable.phaseId, phaseId));
   return result[0];
 }
 

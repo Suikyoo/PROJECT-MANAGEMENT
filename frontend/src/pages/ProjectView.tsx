@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByPhase, createPhase, createTask,
   acceptTask, submitTask, approveTask,
+  tokenGetPhasesByProject, tokenGetTasksByPhase,
   type Phase, type Task, type TaskState,
 } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
@@ -12,17 +13,25 @@ export default function ProjectView() {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const projectId = () => Number(params.project_id);
+  const isClientMode = () => !!params.token_id;
+  const tokenId = () => params.token_id!;
   console.log("projectView: ", projectId());
   const view = () => (searchParams.view as string) || 'board';
 
-  const [phases, { refetch: refetchPhases }] = createResource(projectId, getPhasesByProject);
+  const [phases, { refetch: refetchPhases }] = createResource(
+    projectId,
+    async (pid) => {
+      if (isClientMode()) return tokenGetPhasesByProject(tokenId(), pid);
+      return getPhasesByProject(pid);
+    }
+  );
   const [tasksByPhase, setTasksByPhase] = createSignal<Record<number, Task[]>>({});
   const [error, setError] = createSignal('');
 
   // Phase tasks loading
   const loadTasks = async (phaseId: number) => {
     try {
-      const t = await getTasksByPhase(phaseId);
+      const t = isClientMode() ? await tokenGetTasksByPhase(tokenId(), phaseId) : await getTasksByPhase(phaseId);
       setTasksByPhase((prev) => ({ ...prev, [phaseId]: t }));
     } catch {}
   };
@@ -32,7 +41,7 @@ export default function ProjectView() {
     const p = phases();
     if (p) {
       for (const ph of p) {
-        const t = await getTasksByPhase(ph.id);
+        const t = isClientMode() ? await tokenGetTasksByPhase(tokenId(), ph.id) : await getTasksByPhase(ph.id);
         setTasksByPhase((prev) => ({ ...prev, [ph.id]: t }));
       }
     }
@@ -179,7 +188,7 @@ export default function ProjectView() {
           <h2 class="text-xl font-semibold text-white mb-1">Phases & Tasks</h2>
           <p class="text-sm text-zinc-500">Manage delivery phases and their task pipelines.</p>
         </div>
-        <Show when={isSupervisor()}>
+        <Show when={isSupervisor() && !isClientMode()}>
           <button onClick={() => setShowCreatePhase(true)} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">
             + New Phase
           </button>
@@ -204,7 +213,7 @@ export default function ProjectView() {
           <div class="bg-[#121214] p-4 rounded-lg border border-[#1F1F23] mb-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-sm font-semibold text-white">{item.phase.name} <span class="text-xs font-normal text-zinc-500">({item.phase.state})</span></h3>
-              <Show when={isSupervisor()}>
+              <Show when={isSupervisor() && !isClientMode()}>
                 <button onClick={() => openCreateTask(item.phase.id)} class="bg-[#27272A] border border-[#3F3F46] hover:bg-[#3F3F46] text-white text-[10px] py-1 px-2.5 rounded cursor-pointer transition-colors">+ Task</button>
               </Show>
             </div>

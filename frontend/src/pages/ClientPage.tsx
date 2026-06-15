@@ -4,7 +4,7 @@ import { A, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import {
   tokenGetProjects, tokenGetPhasesByProject, tokenGetFeedbacksByPhase, tokenGetTasksByPhase,
-  type Project, type Phase, type Feedback,
+  type Project, type Phase, type PhaseFeedback,
 } from '../lib/fetch';
 import { Zap } from 'lucide-solid';
 
@@ -23,7 +23,7 @@ export default function ClientPage() {
     expandedProject,
     (projId) => tokenGetPhasesByProject(tokenId(), projId)
   );
-  const [feedbacks, { refetch: refetchFeedbacks }] = createResource<Feedback[], number>(
+  const [feedbacks, { refetch: refetchFeedbacks }] = createResource<PhaseFeedback[], number>(
     expandedPhase,
     (phaseId) => tokenGetFeedbacksByPhase(tokenId(), phaseId)
   );
@@ -39,16 +39,7 @@ export default function ClientPage() {
 
   return (
     <div class="min-h-screen bg-[#0B0B0C] text-zinc-300 font-sans">
-      <header class="border-b border-[#1F1F23] bg-[#121214]">
-        <div class="max-w-5xl mx-auto flex items-center justify-between px-6 h-14">
-          <A href="/" class="flex items-center gap-2 no-underline text-white">
-            <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Zap size={12} /></div>
-            <span class="font-bold text-base tracking-wide">Orbit</span>
-          </A>
-          <span class="text-xs text-zinc-500">Client Portal</span>
-        </div>
-      </header>
-
+      
       <main class="max-w-5xl mx-auto p-6">
         <h1 class="text-2xl font-semibold text-white mb-1">Project Portfolio</h1>
         <p class="text-sm text-zinc-500 mb-8">Browse active projects and their phases.</p>

@@ -16,7 +16,6 @@ export default function InsiderProjects() {
 
   const isSupervisor = () => session()?.role === 'Supervisor';
 
-  console.log(projects())
   const handleCreate = async (e: Event) => {
     e.preventDefault();
     setError('');

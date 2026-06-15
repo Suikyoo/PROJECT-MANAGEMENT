@@ -19,12 +19,12 @@ export default function ProjectLayout({children}: {children?: JSX.Element}) {
   const handleLogout = async () => {
     await logout();
     setSession(null);
-    navigate('/insider/login');
+    navigate('/login');
   };
 
   // If not logged in, redirect to login
   if (!session()) {
-    navigate('/insider/login', { replace: true });
+    navigate('/login', { replace: true });
     return null;
   }
 

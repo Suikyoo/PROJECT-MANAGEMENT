@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "./index.ts";
-import { projectTable, phaseTable, userTable, taskTable, feedbackTable, logTable, tokenTable, accessTable } from "./schema.ts";
+import { projectTable, phaseTable, userTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable } from "./schema.ts";
 import type { TaskState, Role, ApprovalStatus } from "./enums.ts";
 
 // --- User setters ---
@@ -100,8 +100,17 @@ export async function approveTask(taskId: number) {
 
 // --- Feedback setters ---
 
-export async function createFeedback(phaseId: number, userId: number, content: string) {
-  const result = await db.insert(feedbackTable).values({
+export async function createProjectFeedback(projectId: number, userId: number, content: string) {
+  const result = await db.insert(projectFeedbackTable).values({
+    projectId,
+    userId,
+    content,
+  }).returning();
+  return result[0];
+}
+
+export async function createPhaseFeedback(phaseId: number, userId: number, content: string) {
+  const result = await db.insert(phaseFeedbackTable).values({
     phaseId,
     userId,
     content,
@@ -111,15 +120,27 @@ export async function createFeedback(phaseId: number, userId: number, content: s
 
 // --- Log setters ---
 
-export async function upsertProjectLog(projectId: number, content: string) {
-  const existing = await db.select().from(logTable).where(eq(logTable.projectId, projectId));
+export async function createProjectLog(projectId: number, content: string) {
+  const existing = await db.select().from(projectLogTable).where(eq(projectLogTable.projectId, projectId));
   if (existing.length > 0) {
-    return await db.update(logTable)
+    return await db.update(projectLogTable)
       .set({ content })
-      .where(eq(logTable.projectId, projectId))
+      .where(eq(projectLogTable.projectId, projectId))
       .returning();
   }
-  const result = await db.insert(logTable).values({ projectId, content }).returning();
+  const result = await db.insert(projectLogTable).values({ projectId, content }).returning();
+  return result[0];
+}
+
+export async function createPhaseLog(phaseId: number, content: string) {
+  const existing = await db.select().from(phaseLogTable).where(eq(phaseLogTable.phaseId, phaseId));
+  if (existing.length > 0) {
+    return await db.update(phaseLogTable)
+      .set({ content })
+      .where(eq(phaseLogTable.phaseId, phaseId))
+      .returning();
+  }
+  const result = await db.insert(phaseLogTable).values({ phaseId, content }).returning();
   return result[0];
 }
 
