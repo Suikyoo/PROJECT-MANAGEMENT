@@ -17,9 +17,10 @@ import FileHandler from '@tiptap/extension-file-handler';
 
 export default function DashBoardView() {
   const params = useParams();
+  console.log("this is dashboard");
   const isClientMode = () => !!params.token_id;
   const tokenId = () => params.token_id!;
-  const projectId = () => Number(params.project_id || params.id);
+  const projectId = () => Number(params.project_id);
 
   const [phases, { refetch: refetchPhases }] = createResource(
     () => projectId(),

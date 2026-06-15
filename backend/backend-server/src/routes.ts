@@ -308,7 +308,7 @@ export function configRoutes(app: Express) {
 
   // ---- Project Log ----
 
-  app.get("/projects/:id/log", validate, async (req, res) => {
+  app.get("/projects/:id/log", authorize, async (req, res) => {
     const projectId = Number(req.params.id);
     const log = await getProjectLog(projectId);
     return res.json(log || { projectId, content: "" });

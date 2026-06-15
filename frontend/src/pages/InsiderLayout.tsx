@@ -12,7 +12,7 @@ export default function InsiderLayout(props: { children?: JSX.Element }) {
   const params = useParams();
 
   const activeProject = () => {
-    if (params.id) return getProjectById(Number(params.id));
+    if (params.id) return getProjectById(Number(params.project_id));
     return undefined;
   };
 
@@ -34,47 +34,7 @@ export default function InsiderLayout(props: { children?: JSX.Element }) {
 
   return (
     <div class="flex bg-[#0B0B0C] text-zinc-300 min-h-screen font-sans">
-      {/* SIDEBAR */}
-      <aside class="w-60 bg-[#121214] border-r border-[#1F1F23] flex flex-col justify-between p-4 shrink-0">
-        <div>
-          <A href="/insider" class="flex items-center gap-2 p-2 mb-6 no-underline text-white">
-            <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Zap size={12} /></div>
-            <span class="font-bold text-base tracking-wide">Orbit</span>
-          </A>
-
-          <div class="flex flex-col gap-1">
-            <A href="/insider" class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === '/insider' ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-              <Folder size={16} /> All Projects
-            </A>
-
-            <Show when={isProjectView()}>
-              <div class="h-px bg-[#1F1F23] my-2" />
-              <p class="text-[11px] uppercase text-zinc-600 font-bold tracking-wider px-2.5 my-1 truncate">
-                {activeProject()?.name}
-              </p>
-              <A href={`/insider/project/${params.id}`} end class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}` ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                <BarChart3 size={16} /> Dashboard
-              </A>
-              <A href={`/insider/project/${params.id}/tasks`} class={`flex items-center gap-2.5 w-full p-2.5 rounded-md text-sm font-medium no-underline transition-colors ${location.pathname === `/insider/project/${params.id}/tasks` || location.pathname.startsWith(`/insider/project/${params.id}/tasks`) ? 'text-white bg-[#1F1F23]' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                <Columns3 size={16} /> Tasks
-              </A>
-            </Show>
-          </div>
-        </div>
-
-        <div class="bg-[#1A1A1E] p-3 rounded-lg border border-[#27272A]">
-          <p class="text-[11px] text-zinc-500 mb-1 font-semibold tracking-wider uppercase">Signed in as</p>
-          <p class="text-xs text-white font-medium">{session()?.name}</p>
-          <p class="text-[10px] text-zinc-500 mb-2">{session()?.role}</p>
-          <button
-            onClick={handleLogout}
-            class="bg-transparent border-none text-[10px] text-zinc-400 hover:text-white cursor-pointer p-0"
-          >
-            Logout
-          </button>
-        </div>
-      </aside>
-
+      
       {/* MAIN */}
       <div class="flex-1 flex flex-col min-w-0">
         <header class="h-14 border-b border-[#1F1F23] flex items-center justify-between px-6 shrink-0">

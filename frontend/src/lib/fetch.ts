@@ -108,8 +108,10 @@ export const getProjects = () =>
 export const getProject = (id: number) =>
   api<Project[]>('/projects/' + id);
 
-export const getPhasesByProject = (projectId: number) =>
-  api<Phase[]>('/projects/' + projectId + '/phases');
+export const getPhasesByProject = (projectId: number) => {
+  console.log(projectId)
+  return api<Phase[]>('/projects/' + projectId + '/phases');
+}
 
 export const createProject = (name: string, description: string) =>
   api<Project>('/projects', {

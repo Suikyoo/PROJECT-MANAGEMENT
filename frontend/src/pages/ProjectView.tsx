@@ -12,6 +12,7 @@ export default function ProjectView() {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const projectId = () => Number(params.project_id);
+  console.log("projectView: ", projectId());
   const view = () => (searchParams.view as string) || 'board';
 
   const [phases, { refetch: refetchPhases }] = createResource(projectId, getPhasesByProject);

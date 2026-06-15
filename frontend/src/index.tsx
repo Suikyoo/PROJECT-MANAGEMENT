@@ -10,20 +10,27 @@ import ProjectView from './pages/ProjectView';
 import AdminLogin from './pages/AdminLogin';
 import AdminPage from './pages/AdminPage';
 import "./index.css"
+import ProjectLayout from './pages/ProjectLayout';
+import ClientLayout from './pages/ClientLayout';
 
 render(
   () => (
     <Router>
-      <Route path="/client/:token_id">
+      <Route path="/login" component={InsiderLogin} />
+
+      <Route path="/client/:token_id" component={ClientLayout}>
         <Route path="/" component={ClientPage} />
-        <Route path="/project/:project_id" component={() => <DashBoardView />} />
+        <Route path="/project/:project_id" component={() => <DashBoardView/>} />
       </Route>
-      <Route path="/insider/login" component={InsiderLogin} />
+
       <Route path="/insider" component={InsiderLayout}>
         <Route path="/" component={InsiderProjects} />
-        <Route path="/project/:id" component={() => <DashBoardView />} />
-        <Route path="/project/:id/tasks" component={ProjectView} />
+        <Route path="/project/:project_id" component={ProjectLayout} >
+          <Route path="/" component={DashBoardView} />
+          <Route path="/tasks" component={ProjectView} />
+        </Route>
       </Route>
+
       <Route path="/admin">
         <Route path="/" component={AdminLogin} />
         <Route path="/dashboard" component={AdminPage} />
