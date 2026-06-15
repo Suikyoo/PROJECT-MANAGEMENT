@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "./index.ts";
-import { projectTable, phaseTable, userTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable } from "./schema.ts";
+import { projectTable, phaseTable, userTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable } from "./schema.ts";
 import type { TaskState, Role, ApprovalStatus } from "./enums.ts";
 
 // --- User setters ---
@@ -61,13 +61,14 @@ export async function setPhaseState(phaseId: number, state: string) {
 
 // --- Task setters ---
 
-export async function createTask(phaseId: number, supervisorId: number, title: string, description: string, start?: Date, end?: Date) {
+export async function createTask(phaseId: number, supervisorId: number, title: string, description: string, priority?: "low" | "medium" | "high" | "critical", start?: Date, end?: Date) {
   const result = await db.insert(taskTable).values({
     phaseId,
     supervisorId,
     title,
     description,
     state: "backlog",
+    priority: (priority || "medium") as "low" | "medium" | "high" | "critical",
     start,
     end,
   }).returning();
@@ -100,19 +101,21 @@ export async function approveTask(taskId: number) {
 
 // --- Feedback setters ---
 
-export async function createProjectFeedback(projectId: number, userId: number, content: string) {
+export async function createProjectFeedback(projectId: number, userId: number | null, content: string, authorName?: string) {
   const result = await db.insert(projectFeedbackTable).values({
     projectId,
     userId,
+    authorName,
     content,
   }).returning();
   return result[0];
 }
 
-export async function createPhaseFeedback(phaseId: number, userId: number, content: string) {
+export async function createPhaseFeedback(phaseId: number, userId: number | null, content: string, authorName?: string) {
   const result = await db.insert(phaseFeedbackTable).values({
     phaseId,
     userId,
+    authorName,
     content,
   }).returning();
   return result[0];
@@ -175,4 +178,15 @@ export async function deleteAccess(tokenId: string, projectId: number) {
 
 export async function deleteUser(userId: number) {
   return await db.delete(userTable).where(eq(userTable.id, userId)).returning();
+}
+
+// --- Tag setters ---
+
+export async function createTag(taskId: number, name: string) {
+  const result = await db.insert(tagTable).values({ taskId, name }).returning();
+  return result[0];
+}
+
+export async function deleteTag(tagId: number) {
+  return await db.delete(tagTable).where(eq(tagTable.id, tagId)).returning();
 }

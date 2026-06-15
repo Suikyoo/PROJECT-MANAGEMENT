@@ -3,7 +3,7 @@ import { For, Show, createSignal, createResource, createEffect, untrack } from '
 import { useParams } from '@solidjs/router';
 import {
   getPhaseLog, setPhaseLog, getPhaseFeedbacks, createPhaseFeedback, uploadImage,
-  tokenGetPhaseLog, tokenGetFeedbacksByPhase,
+  tokenGetPhaseLog, tokenGetFeedbacksByPhase, tokenCreatePhaseFeedback,
   type PhaseFeedback, PhaseLog
 } from '../lib/fetch';
 import { session } from '../lib/store';
@@ -35,8 +35,14 @@ export default function PhaseView() {
     }
   };
 
-  const [initialLogContent, { refetch: refetchInitialLog }] = createResource(phaseId, (pid) => fetchLogFn(pid));
-  const [logContent, { refetch: refetchLog, mutate: mutateLog }] = createResource(phaseId, (pid) => fetchLogFn(pid));
+  const [initialLogContent, { refetch: refetchInitialLog }] = createResource(
+    () => phaseId(),
+    (pid) => fetchLogFn(pid)
+  );
+  const [logContent, { refetch: refetchLog, mutate: mutateLog }] = createResource(
+    () => phaseId(),
+    (pid) => fetchLogFn(pid)
+  );
   const [logSaving, setLogSaving] = createSignal(false);
   const [showEditLog, setShowEditLog] = createSignal(false);
   const [showViewLog, setShowViewLog] = createSignal(false);
@@ -153,10 +159,13 @@ export default function PhaseView() {
     e.preventDefault();
     const content = newFeedback().trim();
     if (!content) return;
-    if (isClientMode()) return;
     setFeedbackLoading(true);
     try {
-      await createPhaseFeedback(phaseId(), content);
+      if (isClientMode()) {
+        await tokenCreatePhaseFeedback(tokenId(), phaseId(), content);
+      } else {
+        await createPhaseFeedback(phaseId(), content);
+      }
       setNewFeedback('');
       refetchFeedbacks();
     } catch (err: unknown) {
@@ -208,7 +217,7 @@ export default function PhaseView() {
               <div class="bg-[#0B0B0C] p-3 rounded border border-[#1F1F23]">
                 <p class="text-sm text-zinc-300">{fb.content}</p>
                 <div class="flex items-center gap-2 mt-2">
-                  <span class="text-[10px] text-zinc-600">User #{fb.userId}</span>
+                  <span class="text-[10px] text-zinc-600">{fb.authorName ? fb.authorName : fb.userId ? `User #${fb.userId}` : 'Anonymous'}</span>
                   <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
                 </div>
               </div>
@@ -217,8 +226,7 @@ export default function PhaseView() {
         </div>
 
         {/* Feedback Form */}
-        <Show when={!isClientMode()}>
-          <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] p-4 flex gap-3">
+        <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] p-4 flex gap-3">
             <input
               type="text"
               placeholder="Write a comment..."
@@ -233,8 +241,7 @@ export default function PhaseView() {
             >
               {feedbackLoading() ? 'Posting...' : 'Post'}
             </button>
-          </form>
-        </Show>
+        </form>
       </div>
 
       {/* EDIT LOG MODAL */}

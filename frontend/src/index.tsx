@@ -20,18 +20,24 @@ render(
       <Route path="/login" component={InsiderLogin} />
 
       <Route path="/client/:token_id" component={ClientLayout}>
+
         <Route path="/" component={ClientPage} />
-        <Route path="/project/:project_id" component={() => <DashBoardView/>} />
-        <Route path="/project/:project_id/phase/:phase_id" component={() => <PhaseView/>} />
+
+        <Route path="/project/:project_id">
+          <Route path="/" component={DashBoardView} />
+          <Route path="/phase/:phase_id" component={PhaseView} />
+        </Route>
       </Route>
 
       <Route path="/insider" component={InsiderLayout}>
         <Route path="/" component={InsiderProjects} />
+
         <Route path="/project/:project_id" component={ProjectLayout} >
           <Route path="/" component={DashBoardView} />
           <Route path="/tasks" component={ProjectView} />
           <Route path="/phase/:phase_id" component={PhaseView} />
         </Route>
+
       </Route>
 
       <Route path="/admin">

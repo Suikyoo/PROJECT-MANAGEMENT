@@ -34,12 +34,14 @@ export const taskTable = pgTable('tasks', {
   start: timestamp({precision: 6, withTimezone: false}),
   end: timestamp({precision: 6, withTimezone: false}),
   state: text("state").notNull().default("backlog"),
+  priority: text("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
 });
 
 export const projectFeedbackTable = pgTable('project_feedback', {
   id: serial('id').primaryKey(),
   projectId: integer("project_id").references(() => projectTable.id).notNull(),
-  userId: integer("user_id").references(() => userTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id),
+  authorName: text("author_name"),
   content: text("content").notNull(),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
@@ -47,7 +49,8 @@ export const projectFeedbackTable = pgTable('project_feedback', {
 export const phaseFeedbackTable = pgTable('phase_feedback', {
   id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
-  userId: integer("user_id").references(() => userTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id),
+  authorName: text("author_name"),
   content: text("content").notNull(),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
@@ -75,4 +78,10 @@ export const accessTable = pgTable('access', {
   id: serial('id').primaryKey(),
   tokenId: uuid('token_id').references(() => tokenTable.id).notNull(),
   projectId: integer('project_id').references(() => projectTable.id).notNull(),
+});
+
+export const tagTable = pgTable('tags', {
+  id: serial('id').primaryKey(),
+  taskId: integer('task_id').references(() => taskTable.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
 });

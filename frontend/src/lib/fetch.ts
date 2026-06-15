@@ -23,6 +23,13 @@ export interface Task {
   start: string | null;
   end: string | null;
   state: TaskState;
+  priority: string;
+}
+
+export interface Tag {
+  id: number;
+  taskId: number;
+  name: string;
 }
 
 export interface Phase {
@@ -42,7 +49,8 @@ export interface Project {
 export interface ProjectFeedback {
   id: number;
   projectId: number;
-  userId: number;
+  userId: number | null;
+  authorName: string | null;
   content: string;
   createdAt: string;
 }
@@ -50,7 +58,8 @@ export interface ProjectFeedback {
 export interface PhaseFeedback {
   id: number;
   phaseId: number;
-  userId: number;
+  userId: number | null;
+  authorName: string | null;
   content: string;
   createdAt: string;
 }
@@ -150,10 +159,10 @@ export const getTasksByPhase = (phaseId: number) =>
 export const getTasksByProject = (projectId: number) =>
   api<Task[]>('/projects/' + projectId + '/tasks');
 
-export const createTask = (phaseId: number, title: string, description: string, start?: string, end?: string) =>
+export const createTask = (phaseId: number, title: string, description: string, priority?: string, start?: string, end?: string) =>
   api<Task>('/phases/' + phaseId + '/tasks', {
     method: 'POST',
-    body: JSON.stringify({ title, description, start, end }),
+    body: JSON.stringify({ title, description, priority, start, end }),
   });
 
 export const acceptTask = (taskId: number) =>
@@ -165,24 +174,40 @@ export const submitTask = (taskId: number) =>
 export const approveTask = (taskId: number) =>
   api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' });
 
+// Tags
+export const getTagsByTask = (taskId: number) =>
+  api<Tag[]>('/tasks/' + taskId + '/tags');
+
+export const getTagsByProject = (projectId: number) =>
+  api<Tag[]>('/projects/' + projectId + '/tags');
+
+export const createTag = (taskId: number, name: string) =>
+  api<Tag>('/tasks/' + taskId + '/tags', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+
+export const deleteTag = (tagId: number) =>
+  api<void>('/tags/' + tagId, { method: 'DELETE' });
+
 // Feedbacks (Project)
 export const getProjectFeedbacks = (projectId: number) =>
   api<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks');
 
-export const createProjectFeedback = (projectId: number, content: string) =>
+export const createProjectFeedback = (projectId: number, content: string, authorName?: string) =>
   api<ProjectFeedback>('/projects/' + projectId + '/feedbacks', {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, authorName }),
   });
 
 // Feedbacks (Phase)
 export const getPhaseFeedbacks = (phaseId: number) =>
   api<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks');
 
-export const createPhaseFeedback = (phaseId: number, content: string) =>
+export const createPhaseFeedback = (phaseId: number, content: string, authorName?: string) =>
   api<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, authorName }),
   });
 
 export const uploadImage = async (file: File): Promise<{ url: string }> => {
@@ -258,11 +283,27 @@ export const tokenGetTasksByProject = (tokenId: string, projectId: number) =>
 export const tokenGetTasksByPhase = (tokenId: string, phaseId: number) =>
   tokenApi<Task[]>('/phases/' + phaseId + '/tasks', tokenId);
 
+export const tokenGetTagsByProject = (tokenId: string, projectId: number) =>
+  tokenApi<Tag[]>('/projects/' + projectId + '/tags', tokenId);
+
+export const tokenGetTagsByTask = (tokenId: string, taskId: number) =>
+  tokenApi<Tag[]>('/tasks/' + taskId + '/tags', tokenId);
+
 export const tokenGetFeedbacksByPhase = (tokenId: string, phaseId: number) =>
   tokenApi<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks', tokenId);
 
+export const tokenCreatePhaseFeedback = (tokenId: string, phaseId: number, content: string) =>
+  tokenApi<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', tokenId, {
+    body: JSON.stringify({ content }),
+  });
+
 export const tokenGetFeedbacksByProject = (tokenId: string, projectId: number) =>
   tokenApi<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks', tokenId);
+
+export const tokenCreateProjectFeedback = (tokenId: string, projectId: number, content: string) =>
+  tokenApi<ProjectFeedback>('/projects/' + projectId + '/feedbacks', tokenId, {
+    body: JSON.stringify({ content }),
+  });
 
 export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
   tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);

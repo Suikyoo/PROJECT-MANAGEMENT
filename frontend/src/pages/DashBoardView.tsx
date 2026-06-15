@@ -5,6 +5,7 @@ import {
   getPhasesByProject, getTasksByProject, togglePhaseState,
   getProjectLog, setProjectLog, getProjectFeedbacks, createProjectFeedback, uploadImage,
   tokenGetPhasesByProject, tokenGetTasksByProject, tokenGetProjectLog, tokenGetFeedbacksByProject,
+  tokenCreateProjectFeedback,
   type Phase, type Task,
   ProjectLog, ProjectFeedback
 } from '../lib/fetch';
@@ -21,21 +22,27 @@ export default function DashBoardView() {
   const tokenId = () => params.token_id!;
   const projectId = () => Number(params.project_id);
 
-  const [phases, { refetch: refetchPhases }] = createResource(
-    () => projectId(),
-    async (pid) => {
-      if (isClientMode()) return tokenGetPhasesByProject(tokenId(), pid);
-      return getPhasesByProject(pid);
+  const fetchPhasesFn = async (pid: number) => {
+    try {
+      if (isClientMode()) return await tokenGetPhasesByProject(tokenId(), pid);
+      return await getPhasesByProject(pid);
+    } catch {
+      return [];
     }
-  );
+  };
 
-  const [allTasks] = createResource(
-    () => projectId(),
-    async (pid) => {
-      if (isClientMode()) return tokenGetTasksByProject(tokenId(), pid);
-      return getTasksByProject(pid);
+  const [phases, { refetch: refetchPhases }] = createResource(projectId, (pid) => fetchPhasesFn(pid));
+
+  const fetchTasksFn = async (pid: number) => {
+    try {
+      if (isClientMode()) return await tokenGetTasksByProject(tokenId(), pid);
+      return await getTasksByProject(pid);
+    } catch {
+      return [];
     }
-  );
+  };
+
+  const [allTasks] = createResource(projectId, (pid) => fetchTasksFn(pid));
 
   const [error, setError] = createSignal('');
 
@@ -50,8 +57,9 @@ export default function DashBoardView() {
   const fetchLogFn = async (projId: number) => {
     try {
       if (isClientMode()) {
+
         const res = await tokenGetProjectLog(tokenId(), projId);
-        console.log("isclient: ", res);
+        console.log("is client: ", res);
         return res;
       }
       const res = await getProjectLog(projId);
@@ -62,8 +70,8 @@ export default function DashBoardView() {
     }
   };
 
-  const [initialLogContent, {refetch: refetchInitialLog}] = createResource(projectId, (pid) => fetchLogFn(pid));
-  const [logContent, {refetch: refetchLog, mutate: mutateLog}] = createResource(projectId, (pid) => fetchLogFn(pid));
+  const [initialLogContent, {refetch: refetchInitialLog}] = createResource(projectId, async (id) => await fetchLogFn(id));
+  const [logContent, {refetch: refetchLog, mutate: mutateLog}] = createResource(projectId, async (id) => await fetchLogFn(id));
   const [logSaving, setLogSaving] = createSignal(false);
   const [showEditLog, setShowEditLog] = createSignal(false);
   const [showViewLog, setShowViewLog] = createSignal(false);
@@ -76,6 +84,7 @@ export default function DashBoardView() {
 
   // Create editor when element is available and edit modal is open
   createEffect(() => {
+    console.log("log content changed ", initialLogContent()?.content);
     const el = editor_ref();
     if (!el || !showEditLog()) {
       if (editor()) {
@@ -183,20 +192,26 @@ export default function DashBoardView() {
     }
   };
 
-  const [feedbacks, { refetch: refetchFeedbacks }] = createResource(projectId, (pid) => fetchFeedbacksFn(pid));
+  const [feedbacks, { refetch: refetchFeedbacks }] = createResource(projectId, async (pid) => await fetchFeedbacksFn(pid));
   const [newFeedback, setNewFeedback] = createSignal('');
+  const [feedbackAuthorName, setFeedbackAuthorName] = createSignal('');
   const [feedbackLoading, setFeedbackLoading] = createSignal(false);
 
   const handleSubmitFeedback = async (e: Event) => {
     e.preventDefault();
     const content = newFeedback().trim();
     if (!content) return;
-    if (isClientMode()) return;
     setFeedbackLoading(true);
     try {
-      await createProjectFeedback(projectId(), content);
-      setNewFeedback('');
-      refetchFeedbacks();
+      if (projectId()) {
+        if (isClientMode()) {
+          await tokenCreateProjectFeedback(tokenId(), projectId() as number, content);
+        } else {
+          await createProjectFeedback(projectId() as number, content);
+        }
+        setNewFeedback('');
+        refetchFeedbacks();
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to post feedback');
     } finally {
@@ -217,8 +232,7 @@ export default function DashBoardView() {
       </div>
 
       {/* Project Log Viewer */}
-      <h1>log content</h1>
-      <Show when={initialLogContent()}>
+      <Show when={!initialLogContent.loading} fallback={<p class="text-zinc-500 text-sm p-4">Loading log...</p>}>
         <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-8 relative">
           <div class="flex items-center justify-between p-4 border-b border-[#1F1F23]">
             <h3 class="text-sm font-semibold uppercase text-zinc-400 tracking-wider">Project Log</h3>
@@ -288,16 +302,15 @@ export default function DashBoardView() {
               <div class="bg-[#0B0B0C] p-3 rounded border border-[#1F1F23]">
                 <p class="text-sm text-zinc-300">{fb.content}</p>
                 <div class="flex items-center gap-2 mt-2">
-                  <span class="text-[10px] text-zinc-600">User #{fb.userId}</span>
+                  <span class="text-[10px] text-zinc-600">{fb.authorName ? fb.authorName : fb.userId ? `User #${fb.userId}` : 'Anonymous'}</span>
                   <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
                 </div>
               </div>
             )}</For>
           </div>
         </div>
-        <Show when={!isClientMode()}>
-          <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] p-4 flex gap-3">
-            <input
+        <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] p-4 flex gap-3">
+          <input
               type="text"
               placeholder="Write a comment..."
               value={newFeedback()}
@@ -311,8 +324,7 @@ export default function DashBoardView() {
             >
               {feedbackLoading() ? 'Posting...' : 'Post'}
             </button>
-          </form>
-        </Show>
+        </form>
       </div>
 
       {/* EDIT LOG MODAL */}

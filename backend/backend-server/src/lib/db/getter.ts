@@ -1,6 +1,6 @@
 import { eq, type InferSelectModel } from "drizzle-orm";
 import { db } from "./index.ts";
-import { phaseTable, userTable, projectTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable } from "./schema.ts";
+import { phaseTable, userTable, projectTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable } from "./schema.ts";
 
 export async function getProjects(): Promise<InferSelectModel<typeof projectTable>[]> {
   return await db.select().from(projectTable);
@@ -66,6 +66,7 @@ export async function getTasksByProjectId(projectId: number): Promise<InferSelec
     start: taskTable.start,
     end: taskTable.end,
     state: taskTable.state,
+    priority: taskTable.priority,
   })
   .from(taskTable)
   .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
@@ -109,4 +110,22 @@ export async function getAllowedProjectsByTokenId(id: string): Promise<InferSele
 
 export async function getAccessByTokenId(tokenId: string): Promise<InferSelectModel<typeof accessTable>[]> {
   return await db.select().from(accessTable).where(eq(accessTable.tokenId, tokenId));
+}
+
+// --- Tags ---
+
+export async function getTagsByTaskId(taskId: number): Promise<InferSelectModel<typeof tagTable>[]> {
+  return await db.select().from(tagTable).where(eq(tagTable.taskId, taskId));
+}
+
+export async function getTagsByProjectId(projectId: number): Promise<InferSelectModel<typeof tagTable>[]> {
+  return await db.select({
+    id: tagTable.id,
+    taskId: tagTable.taskId,
+    name: tagTable.name,
+  })
+    .from(tagTable)
+    .innerJoin(taskTable, eq(tagTable.taskId, taskTable.id))
+    .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
+    .where(eq(phaseTable.projectId, projectId));
 }

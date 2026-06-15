@@ -4,11 +4,12 @@ import {
   getProjects, getProjectsById, 
   getPhasesByProjectId, getPhasesById,
   getUsers, getUserById, getUserByUsername, getPendingUsers,
-  getTaskByPhaseId,
+  getTaskByPhaseId, getTaskById,
   getProjectFeedbacksByProjectId, getPhaseFeedbacksByPhaseId,
   getTasksByProjectId,
   getProjectLog, getPhaseLog,
   getAllTokens, getAllowedProjectsByTokenId, getAccessByTokenId,
+  getTagsByTaskId, getTagsByProjectId, getTokenById,
 } from "./lib/db/getter.ts"
 import { 
   createUser, approveUser, setUserRole, deleteUser,
@@ -16,6 +17,7 @@ import {
   createTask, acceptTask, submitTask, approveTask,
   createProjectFeedback, createPhaseFeedback, createProjectLog, createPhaseLog,
   createToken, createAccess, deleteToken, deleteAccess,
+  createTag, deleteTag,
 } from "./lib/db/setter.ts"
 import { authenticateAdmin, authenticateUser } from "./lib/auth/index.ts";
 import { authorize, requireRole, validate } from "./lib/auth/middleware.ts";
@@ -266,13 +268,14 @@ export function configRoutes(app: Express) {
 
   app.post("/phases/:id/tasks", authorize, requireRole("Supervisor"), async (req, res) => {
     const phaseId = Number(req.params.id);
-    const { title, description, start, end } = req.body as { title?: string; description?: string; start?: string; end?: string };
+    const { title, description, priority, start, end } = req.body as { title?: string; description?: string; priority?: "low" | "medium" | "high" | "critical"; start?: string; end?: string };
     if (!title) return res.status(400).json({ error: "title required" });
     return res.json(await createTask(
       phaseId,
       res.locals.userId,
       title,
       description || "",
+      priority,
       start ? new Date(start) : undefined,
       end ? new Date(end) : undefined,
     ));
@@ -308,6 +311,34 @@ export function configRoutes(app: Express) {
   app.post("/tasks/:id/approve", authorize, requireRole("QA"), async (req, res) => {
     const taskId = Number(req.params.id);
     return res.json(await approveTask(taskId));
+  });
+
+  // ---- Tags ----
+
+  // Get tags for a task
+  app.get("/tasks/:id/tags", authorize, async (req, res) => {
+    const taskId = Number(req.params.id);
+    return res.json(await getTagsByTaskId(taskId));
+  });
+
+  // Get all tags for a project (for autocomplete suggestions)
+  app.get("/projects/:id/tags", authorize, async (req, res) => {
+    const projectId = Number(req.params.id);
+    return res.json(await getTagsByProjectId(projectId));
+  });
+
+  // Add a tag to a task
+  app.post("/tasks/:id/tags", authorize, requireRole("Supervisor"), async (req, res) => {
+    const taskId = Number(req.params.id);
+    const { name } = req.body as { name?: string };
+    if (!name) return res.status(400).json({ error: "name required" });
+    return res.json(await createTag(taskId, name));
+  });
+
+  // Delete a tag
+  app.delete("/tags/:id", authorize, requireRole("Supervisor"), async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await deleteTag(id));
   });
 
   // ---- Image upload ----
@@ -398,7 +429,11 @@ export function configRoutes(app: Express) {
     if (!allowed.find(p => p.id === phases[0].projectId)) {
       return res.status(403).json({ error: "Unauthorized" });
     }
-    return res.json(await getPhaseFeedbacksByPhaseId(phaseId));
+    const { content } = req.body as { content?: string };
+    if (!content) return res.status(400).json({ error: "content required" });
+    const token = await getTokenById(tokenId);
+    const feedback = await createPhaseFeedback(phaseId, null, content, token?.name);
+    return res.json(feedback);
   });
 
   app.post("/token/projects/:id/feedbacks", validate, async (req, res) => {
@@ -408,7 +443,11 @@ export function configRoutes(app: Express) {
     if (!allowed.find(p => p.id === projectId)) {
       return res.status(403).json({ error: "Unauthorized" });
     }
-    return res.json(await getProjectFeedbacksByProjectId(projectId));
+    const { content } = req.body as { content?: string };
+    if (!content) return res.status(400).json({ error: "content required" });
+    const token = await getTokenById(tokenId);
+    const feedback = await createProjectFeedback(projectId, null, content, token?.name);
+    return res.json(feedback);
   });
 
   app.post("/token/projects/:id/log", validate, async (req, res) => {
@@ -455,6 +494,30 @@ export function configRoutes(app: Express) {
       return res.status(403).json({ error: "Unauthorized" });
     }
     return res.json(await getTaskByPhaseId(phaseId));
+  });
+
+  app.post("/token/projects/:id/tags", validate, async (req, res) => {
+    const projectId = Number(req.params.id);
+    const tokenId = res.locals.tokenId!;
+    const allowed = await getAllowedProjectsByTokenId(tokenId);
+    if (!allowed.find(p => p.id === projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    return res.json(await getTagsByProjectId(projectId));
+  });
+
+  app.post("/token/tasks/:id/tags", validate, async (req, res) => {
+    const taskId = Number(req.params.id);
+    const tokenId = res.locals.tokenId!;
+    const tasks = await getTaskById(taskId);
+    if (!tasks.length) return res.status(404).json({ error: "Task not found" });
+    const phase = (await getPhasesById(tasks[0].phaseId))[0];
+    if (!phase) return res.status(404).json({ error: "Phase not found" });
+    const allowed = await getAllowedProjectsByTokenId(tokenId);
+    if (!allowed.find(p => p.id === phase.projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    return res.json(await getTagsByTaskId(taskId));
   });
 
 }
