@@ -2,11 +2,12 @@
 import { For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
-import { getProjects, createProject, getPhasesByProject, getTasksByProject, tokenGetProjects, tokenGetPhasesByProject, tokenGetTasksByProject, type Project, type Phase, type Task, type TaskState } from '../lib/fetch';
+import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, tokenGetProjects, tokenGetPhasesByProject, tokenGetTasksByProject, type Project, type Phase, type Task, type User } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
-import { Plus } from 'lucide-solid';
-import { Chart, BarElement, CategoryScale, LinearScale, BarController, Tooltip, ArcElement, DoughnutController, PolarAreaController, RadialLinearScale, Legend } from 'chart.js';
-Chart.register(BarElement, CategoryScale, LinearScale, BarController, Tooltip, ArcElement, DoughnutController, PolarAreaController, RadialLinearScale, Legend);
+import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-solid';
+import { nameToColor } from '../lib/misc';
+import { Chart, BarElement, CategoryScale, LinearScale, BarController, Tooltip } from 'chart.js';
+Chart.register(BarElement, CategoryScale, LinearScale, BarController, Tooltip);
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -29,6 +30,8 @@ export default function Projects() {
   const [allPhases, setAllPhases] = createSignal<Phase[]>([]);
   const [allTasks, setAllTasks] = createSignal<Task[]>([]);
   const [aggregateLoading, setAggregateLoading] = createSignal(false);
+  const [allUsers, setAllUsers] = createSignal<User[]>([]);
+  const [projectUsers, setProjectUsers] = createSignal<Record<number, User[]>>({});
 
   const isSupervisor = createMemo(() => {
     if (isClientMode()) return false;
@@ -66,6 +69,29 @@ export default function Projects() {
     } finally {
       setAggregateLoading(false);
     }
+  });
+
+  // Fetch all users (for Team Workload name mapping)
+  createResource(() => !isClientMode(), async () => {
+    if (isClientMode()) return;
+    try {
+      const users = await getAllUsers().catch(() => [] as User[]);
+      setAllUsers(users);
+    } catch { /* ignore */ }
+  });
+
+  // Fetch users per project
+  createResource(projects, async () => {
+    const projs = projects();
+    if (!projs || projs.length === 0) return;
+    try {
+      const results = await Promise.all(projs.map(p =>
+        getProjectUsers(p.id).catch(() => [] as User[])
+      ));
+      const map: Record<number, User[]> = {};
+      projs.forEach((p, i) => { map[p.id] = results[i] || []; });
+      setProjectUsers(map);
+    } catch { /* ignore */ }
   });
 
   // Phase -> project mapping
@@ -108,7 +134,7 @@ export default function Projects() {
     return map;
   });
 
-  // Task state counts for histogram
+  // Task state counts
   const taskStateCounts = createMemo(() => {
     const counts: Record<string, number> = { backlog: 0, 'in-progress': 0, 'to review': 0, 'QA approved': 0 };
     allTasks().forEach(t => {
@@ -117,7 +143,7 @@ export default function Projects() {
     return counts;
   });
 
-  // Urgent tasks (top 5 by closest end date, not QA approved)
+  // urgent tasks — not QA approved, sorted by closest end date
   const urgentTasks = createMemo(() => {
     return allTasks()
       .filter(t => t.state !== 'QA approved' && t.end)
@@ -125,147 +151,95 @@ export default function Projects() {
       .slice(0, 5);
   });
 
+  // Helper: get user initials
+  const getInitials = (name: string) => {
+    const parts = name.split(' ');
+    return parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  };
+
   // Helper: get project id for a task
   const taskProjectId = (task: Task) => phaseToProject()[task.phaseId] || null;
 
-  // Project state counts for pie chart
-  const projectStateCounts = createMemo(() => {
-    const counts: Record<string, number> = {};
-    (projects() || []).forEach(p => { counts[p.state] = (counts[p.state] || 0) + 1; });
-    return counts;
+  // Greeting
+  const greetingText = createMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
   });
+  const todayDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Task priority counts for pie chart
-  const priorityCounts = createMemo(() => {
-    const counts: Record<string, number> = {};
-    allTasks().forEach(t => {
-      const p = t.priority || 'medium';
-      counts[p] = (counts[p] || 0) + 1;
-    });
-    return counts;
-  });
-
-  // Chart.js instances
-  let histogramCanvas: HTMLCanvasElement | undefined;
-  let histogramChart: Chart | undefined;
-  let taskPolarCanvas: HTMLCanvasElement | undefined;
-  let taskPolarChart: Chart | undefined;
-  let projDoughnutCanvas: HTMLCanvasElement | undefined;
-  let projDoughnutChart: Chart | undefined;
-  let priorityDoughnutCanvas: HTMLCanvasElement | undefined;
-  let priorityDoughnutChart: Chart | undefined;
-
-  const darkChartPlugins = {
-    legend: { display: true, position: 'bottom' as const, labels: { color: '#71717A', font: { size: 9 }, padding: 12, usePointStyle: true, pointStyleWidth: 6 } },
-    tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 }
-  };
-
-  const renderHistogram = () => {
-    if (!histogramCanvas) return;
+  const statCards = createMemo(() => {
     const counts = taskStateCounts();
-    const labels = ['Backlog', 'In Progress', 'To Review', 'QA Approved'];
-    const data = [counts.backlog, counts['in-progress'], counts['to review'], counts['QA approved']];
-    if (histogramChart) histogramChart.destroy();
+    return [
+      { label: 'Total Tasks', value: Object.values(counts).reduce((s, c) => s + c, 0), icon: Hash, color: 'text-zinc-400', bg: 'bg-[#1F1F23]' },
+      { label: 'In Progress', value: counts['in-progress'], icon: Activity, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+      { label: 'QA Approved', value: counts['QA approved'], icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10' },
+      { label: 'To Review', value: counts['to review'], icon: AlertCircle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    ];
+  });
+
+  // bar chart data
+  const barChartData = createMemo(() => {
+    const counts = taskStateCounts();
+    return [
+      { state: 'Backlog', count: counts.backlog, color: '#52525B' },
+      { state: 'In Progress', count: counts['in-progress'], color: '#3B82F6' },
+      { state: 'To Review', count: counts['to review'], color: '#F97316' },
+      { state: 'QA Approved', count: counts['QA approved'], color: '#22C55E' },
+    ];
+  });
+
+  // Chart.js bar chart
+  let barCanvas: HTMLCanvasElement | undefined;
+  let barChart: Chart | undefined;
+  const renderBarChart = () => {
+    if (!barCanvas) return;
+    const data = barChartData();
+    if (barChart) barChart.destroy();
     try {
-      histogramChart = new Chart(histogramCanvas, {
+      barChart = new Chart(barCanvas, {
         type: 'bar',
         data: {
-          labels,
-          datasets: [{ data, backgroundColor: ['#71717A', '#3B82F6', '#F97316', '#22C55E'], borderRadius: 3, borderSkipped: false }]
+          labels: data.map(d => d.state),
+          datasets: [{ data: data.map(d => d.count), backgroundColor: data.map(d => d.color), borderRadius: 3, borderSkipped: false }]
         },
         options: {
-          indexAxis: 'y',
+          indexAxis: 'x',
           responsive: true,
           maintainAspectRatio: false,
           plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 } },
           scales: {
-            x: { ticks: { color: '#71717A', font: { size: 9 }, stepSize: 1, precision: 0 }, grid: { color: '#1F1F23' }, beginAtZero: true },
-            y: { ticks: { color: '#A1A1AA', font: { size: 10 }, padding: 4 }, grid: { display: false } }
+            x: { ticks: { color: '#A1A1AA', font: { size: 10 }, padding: 4 }, grid: { display: false } },
+            y: { ticks: { color: '#71717A', font: { size: 9 }, stepSize: 1, precision: 0 }, grid: { color: '#1F1F23' }, beginAtZero: true }
           }
         }
       });
-    } catch (e) { console.error('[Projects] renderHistogram failed:', e); }
+    } catch (e) { console.error('[Projects] bar chart failed:', e); }
   };
-
-  const renderTaskPolar = () => {
-    if (!taskPolarCanvas) return;
-    const counts = taskStateCounts();
-    if (taskPolarChart) taskPolarChart.destroy();
-    try {
-      taskPolarChart = new Chart(taskPolarCanvas, {
-        type: 'polarArea',
-        data: {
-          labels: ['Backlog', 'In Progress', 'To Review', 'QA Approved'],
-          datasets: [{ data: [counts.backlog, counts['in-progress'], counts['to review'], counts['QA approved']], backgroundColor: ['#71717A', '#3B82F6', '#F97316', '#22C55E'], borderColor: '#121214', borderWidth: 2 }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: true, position: 'bottom', labels: { color: '#71717A', font: { size: 9 }, padding: 10, usePointStyle: true, pointStyleWidth: 6 } },
-            tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 }
-          },
-          scales: { r: { ticks: { color: '#71717A', font: { size: 8 }, backdropColor: 'transparent', stepSize: 1, precision: 0 }, grid: { color: '#1F1F23' }, pointLabels: { color: '#A1A1AA', font: { size: 9 } } } }
-        }
-      });
-    } catch (e) { console.error('[Projects] renderTaskPolar failed:', e); }
-  };
-
-  const renderProjDoughnut = () => {
-    if (!projDoughnutCanvas) return;
-    const counts = projectStateCounts();
-    const entries = Object.entries(counts);
-    const colors = ['#3B82F6', '#22C55E', '#F97316', '#A855F7', '#EC4899', '#14B8A6', '#F59E0B', '#71717A'];
-    if (projDoughnutChart) projDoughnutChart.destroy();
-    try {
-      projDoughnutChart = new Chart(projDoughnutCanvas, {
-        type: 'doughnut',
-        data: { labels: entries.map(e => e[0]), datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map((_, i) => colors[i % colors.length]), borderColor: '#121214', borderWidth: 2, hoverBorderColor: '#27272A' }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: darkChartPlugins }
-      });
-    } catch (e) { console.error('[Projects] renderProjDoughnut failed:', e); }
-  };
-
-  const renderPriorityDoughnut = () => {
-    if (!priorityDoughnutCanvas) return;
-    const counts = priorityCounts();
-    const order = ['critical', 'high', 'medium', 'low'];
-    const colors = ['#EF4444', '#F97316', '#3B82F6', '#71717A'];
-    if (priorityDoughnutChart) priorityDoughnutChart.destroy();
-    try {
-      priorityDoughnutChart = new Chart(priorityDoughnutCanvas, {
-        type: 'doughnut',
-        data: { labels: ['Critical', 'High', 'Medium', 'Low'], datasets: [{ data: order.map(o => counts[o] || 0), backgroundColor: colors, borderColor: '#121214', borderWidth: 2, hoverBorderColor: '#27272A' }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: darkChartPlugins }
-      });
-    } catch (e) { console.error('[Projects] renderPriorityDoughnut failed:', e); }
-  };
-
-  // Re-render when data changes
-  createEffect(() => { taskStateCounts(); renderHistogram(); renderTaskPolar(); });
-  createEffect(() => { projectStateCounts(); renderProjDoughnut(); });
-  createEffect(() => { priorityCounts(); renderPriorityDoughnut(); });
+  createEffect(() => { barChartData(); renderBarChart(); });
 
   return (
-    <div class="flex gap-5 p-5">
-      <div class="flex-1 min-w-0">
+    <div class="flex flex-col gap-5 p-5">
       <Show when={error()}>
-        <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">
+        <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded">
           {error()}
           <button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button>
         </div>
       </Show>
 
-      {/* Header */}
-      <div class="flex items-center justify-between mb-5">
+      {/* Greeting Header */}
+      <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-lg font-semibold text-white">Projects</h1>
-          <p class="text-[11px] text-zinc-500 mt-0.5">{(projects() || []).length} projects</p>
+          <h1 class="text-xl font-semibold text-white">{greetingText()}, {session()?.username || 'User'}!</h1>
+          <p class="text-xs text-zinc-500 mt-1">{todayDate}</p>
         </div>
         <Show when={isSupervisor()}>
           <button
             onClick={() => setShowCreate(true)}
-            class="inline-flex items-center gap-1.5 bg-[#1F1F23] hover:bg-[#27272A] text-white text-[11px] font-medium px-3 py-1.5 rounded-md cursor-pointer transition-colors border border-[#27272A]"
+            class="inline-flex items-center gap-1.5 bg-white hover:bg-zinc-200 text-black text-[11px] font-medium px-3 py-1.5 rounded-md cursor-pointer transition-colors"
           >
             <Plus size={13} />
             Create project
@@ -273,116 +247,185 @@ export default function Projects() {
         </Show>
       </div>
 
-      {/* Project List — horizontal rows */}
-      <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden">
-        {/* Table header */}
-        <div class="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-[#1F1F23] text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-          <div class="col-span-3">Name</div>
-          <div class="col-span-3">Progress</div>
-          <div class="col-span-2">Phases</div>
-          <div class="col-span-2">Status</div>
-          <div class="col-span-1">Key</div>
-          <div class="col-span-1" />
-        </div>
-
-        <For each={projects()}>{(project) => {
-          const projectPhases = () => phasesByProjectId()[project.id] || [];
-          return (
-          <div
-            onClick={() => navigate(`${basePath()}/project/${project.id}`)}
-            class="grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-[#1A1A1E] transition-colors cursor-pointer border-b border-[#1F1F23] last:border-b-0"
-          >
-            {/* Name */}
-            <div class="col-span-3 min-w-0">
-              <p class="text-[13px] font-medium text-white truncate leading-tight">{project.name}</p>
-              <p class="text-[11px] text-zinc-500 truncate">{project.description || '—'}</p>
+      {/* Stat Cards */}
+      <div class="grid grid-cols-4 gap-3">
+        <For each={statCards()}>{({ label, value, color, bg, icon: Icon }) => (
+          <div class={`${bg} border border-[#1F1F23] rounded-lg p-3`}>
+            <div class="flex items-center gap-1.5 mb-1">
+              <Icon size={12} class={color} />
+              <span class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
             </div>
-            {/* Progress bar — single bar for whole project */}
-            <div class="col-span-3">
-              <Show when={(tasksByProjectId()[project.id] || []).length > 0} fallback={
-                <div class="h-1.5 rounded-full bg-[#27272A]"></div>
-              }>
-                {(() => {
-                  const projTasks = tasksByProjectId()[project.id] || [];
-                  const total = projTasks.length || 1;
-                  const qa = projTasks.filter(t => t.state === 'QA approved').length;
-                  const review = projTasks.filter(t => t.state === 'to review').length;
-                  const inProg = projTasks.filter(t => t.state === 'in-progress').length;
-                  const backlog = projTasks.filter(t => t.state === 'backlog').length;
-                  return (
-                    <div class="h-1.5 rounded-full bg-[#27272A] flex overflow-hidden" title={`QA Approved ${qa} · In Review ${review} · In Progress ${inProg} · Backlog ${backlog}`}>
-                      {qa > 0 && <div class="phase-segment phase-segment-green" style={{ width: `${(qa/total)*100}%` }}></div>}
-                      {review > 0 && <div class="phase-segment phase-segment-orange" style={{ width: `${(review/total)*100}%` }}></div>}
-                      {inProg > 0 && <div class="phase-segment phase-segment-blue" style={{ width: `${(inProg/total)*100}%` }}></div>}
-                      {backlog > 0 && <div class="phase-segment phase-segment-zinc" style={{ width: `${(backlog/total)*100}%` }}></div>}
-                    </div>
-                  );
-                })()}
-              </Show>
-            </div>
-            {/* Phase count */}
-            <div class="col-span-2">
-              <p class="text-[11px] text-zinc-500">{projectPhases().length} phase{projectPhases().length !== 1 ? 's' : ''}</p>
-            </div>
-            {/* Status */}
-            <div class="col-span-2">
-              <span class="status-chip status-chip-blue">{project.state}</span>
-            </div>
-            {/* Key (abbreviation) */}
-            <div class="col-span-1">
-              <span class="text-[11px] text-zinc-500 font-mono uppercase">
-                {project.name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()}
-              </span>
-            </div>
-            {/* Arrow */}
-            <div class="col-span-1 text-right">
-              <span class="text-zinc-600 text-[10px]">→</span>
-            </div>
+            <p class="text-sm font-semibold text-white">{value}</p>
           </div>
-        );
-        }}</For>
-
-        <Show when={!projects.loading && (projects() || []).length === 0}>
-          <div class="px-4 py-12 text-center">
-            <p class="text-zinc-600 text-xs">No projects yet.</p>
-            <Show when={isSupervisor()}>
-              <button onClick={() => setShowCreate(true)} class="mt-2 text-blue-400 hover:text-blue-300 text-[11px] cursor-pointer bg-transparent border-none">
-                Create your first project
-              </button>
-            </Show>
-          </div>
-        </Show>
+        )}</For>
       </div>
 
-      {/* Charts Section — slim 2x2 grid */}
-      <Show when={!aggregateLoading()}>
-        <div class="grid grid-cols-2 gap-3 mt-4">
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Tasks by State</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { histogramCanvas = el; setTimeout(() => renderHistogram(), 0); }}></canvas>
+      {/* Main Content: 2+1 Grid */}
+      <div class="flex gap-5">
+        {/* Left column (2/3) */}
+        <div class="flex-1 min-w-0 space-y-5">
+          {/* Active Projects */}
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4">
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Active Projects</h2>
+            <div class="space-y-2">
+              <For each={projects()}>{(project) => {
+                const projTasks = () => tasksByProjectId()[project.id] || [];
+                const total = () => projTasks().length;
+                const qa = () => projTasks().filter(t => t.state === 'QA approved').length;
+                const review = () => projTasks().filter(t => t.state === 'to review').length;
+                const inProg = () => projTasks().filter(t => t.state === 'in-progress').length;
+                const complete = () => qa() + review();
+                const pct = () => total() > 0 ? Math.round(((complete()) / total()) * 100) : 0;
+                return (
+                  <div
+                    onClick={() => navigate(`${basePath()}/project/${project.id}`)}
+                    class="flex items-center gap-3 p-3 rounded-md hover:bg-[#1A1A1E] transition-colors cursor-pointer border border-transparent hover:border-[#27272A]"
+                  >
+                    {/* Project icon badge */}
+                    <div class="w-8 h-8 rounded flex items-center justify-center text-[10px] font-bold bg-[#1F1F23] text-zinc-400 shrink-0">
+                      {project.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <p class="text-[13px] font-medium text-white truncate">{project.name}</p>
+                        <span class={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                          project.state === 'active' ? 'bg-green-500/10 text-green-400' :
+                          project.state === 'on hold' ? 'bg-yellow-500/10 text-yellow-400' :
+                          project.state === 'completed' ? 'bg-blue-500/10 text-blue-400' :
+                          'bg-zinc-500/10 text-zinc-400'
+                        }`}>{project.state}</span>
+                      </div>
+                      <p class="text-[11px] text-zinc-500 truncate mt-0.5">{project.description || 'No description'}</p>
+                      <div class="flex items-center gap-2 mt-1.5">
+                        <div class="flex-1 h-1 rounded-full bg-[#27272A] overflow-hidden">
+                          <div class="h-full rounded-full bg-green-500 transition-all duration-300" style={{ width: `${pct()}%` }}></div>
+                        </div>
+                        <span class="text-[10px] text-zinc-500 shrink-0">{complete()} / {total()} tasks</span>
+                        <span class="text-[10px] text-zinc-600 shrink-0">{pct()}%</span>
+                      </div>
+                      {/* Project Users */}
+                      <Show when={(projectUsers()[project.id] || []).length > 0}>
+                        <div class="flex items-center gap-1 mt-2">
+                          <For each={(projectUsers()[project.id] || []).slice(0, 5)}>
+                            {(user) => {
+                              const color = nameToColor(user.name || user.username);
+                              return (
+                                <div
+                                  title={user.name || user.username}
+                                  class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0"
+                                  style={{ background: color.bg }}
+                                >
+                                  {getInitials(user.name || user.username)}
+                                </div>
+                              );
+                            }}
+                          </For>
+                          <Show when={(projectUsers()[project.id] || []).length > 5}>
+                            <span class="text-[9px] text-zinc-600 ml-0.5">+{(projectUsers()[project.id] || []).length - 5}</span>
+                          </Show>
+                        </div>
+                      </Show>
+                    </div>
+                    <ArrowRight size={14} class="text-zinc-600 shrink-0" />
+                  </div>
+                );
+              }}</For>
+              <Show when={!projects.loading && (projects() || []).length === 0}>
+                <div class="py-8 text-center">
+                  <p class="text-zinc-600 text-xs">No projects yet.</p>
+                  <Show when={isSupervisor()}>
+                    <button onClick={() => setShowCreate(true)} class="mt-2 text-blue-400 hover:text-blue-300 text-[11px] cursor-pointer bg-transparent border-none">
+                      Create your first project
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           </div>
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Task Distribution</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { taskPolarCanvas = el; setTimeout(() => renderTaskPolar(), 0); }}></canvas>
-            </div>
-          </div>
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Project States</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { projDoughnutCanvas = el; setTimeout(() => renderProjDoughnut(), 0); }}></canvas>
-            </div>
-          </div>
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Priority Breakdown</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { priorityDoughnutCanvas = el; setTimeout(() => renderPriorityDoughnut(), 0); }}></canvas>
-            </div>
+
+          {/* Tasks by Status bar chart */}
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4">
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Tasks by Status</h2>
+            <Show when={!aggregateLoading()} fallback={<div class="h-40 flex items-center justify-center text-zinc-600 text-xs">Loading...</div>}>
+              <div style="height: 160px; width: 70%; margin: auto;">
+                <canvas ref={(el) => { barCanvas = el; setTimeout(() => renderBarChart(), 0); }}></canvas>
+              </div>
+            </Show>
           </div>
         </div>
-      </Show>
+
+        {/* Right column (1/3) */}
+        <div class="w-72 shrink-0 space-y-4">
+          {/* Upcoming Deadlines */}
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4">
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Upcoming Deadlines</h2>
+            <Show when={urgentTasks().length > 0} fallback={<p class="text-[11px] text-zinc-600 py-2">No upcoming deadlines</p>}>
+              <div class="space-y-1">
+                <For each={urgentTasks()}>{(task) => {
+                  const projId = taskProjectId(task);
+                  return (
+                    <A
+                      href={projId ? `${basePath()}/project/${projId}` : '#'}
+                      class="block no-underline py-2 px-2 hover:bg-[#1A1A1E] rounded transition-colors border-b border-[#1F1F23] last:border-b-0"
+                    >
+                      <p class="text-[12px] text-white truncate leading-tight">{task.title}</p>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class={`${
+                          task.priority === 'critical' ? 'dot-orange' :
+                          task.priority === 'high' ? 'dot-orange' :
+                          task.priority === 'low' ? 'dot-zinc' : 'dot-blue'
+                        }`}></span>
+                        <span class="text-[10px] text-zinc-500">{task.state}</span>
+                        <span class="text-[10px] text-zinc-600">{task.end ? new Date(task.end).toLocaleDateString() : '—'}</span>
+                      </div>
+                    </A>
+                  );
+                }}</For>
+              </div>
+            </Show>
+          </div>
+
+          {/* Team Workload */}
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4">
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Team Workload</h2>
+            <Show when={!aggregateLoading()} fallback={<p class="text-[11px] text-zinc-600">Loading...</p>}>
+              <div class="space-y-2">
+                {(() => {
+                  const users = allUsers();
+                  const userMap: Record<number, string> = {};
+                  users.forEach(u => { userMap[u.id] = u.name || u.username; });
+                  const all = allTasks();
+                  const assigned: Record<string, { count: number; total: number }> = {};
+                  all.forEach(t => {
+                    if (t.developerId) {
+                      const name = userMap[t.developerId] || `Dev #${t.developerId}`;
+                      if (!assigned[name]) assigned[name] = { count: 0, total: 0 };
+                      assigned[name].total++;
+                      if (t.state === 'in-progress' || t.state === 'to review') assigned[name].count++;
+                    }
+                  });
+                  const entries = Object.entries(assigned).slice(0, 6);
+                  return entries.length > 0 ? (
+                    <For each={entries}>{([name, data]) => (
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="text-[11px] text-zinc-300 truncate">{name}</span>
+                          <span class="text-[10px] text-zinc-500">{data.count}/{data.total}</span>
+                        </div>
+                        <div class="h-1 rounded-full bg-[#27272A] overflow-hidden">
+                          <div class="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${data.total > 0 ? (data.count / data.total) * 100 : 0}%` }}></div>
+                        </div>
+                      </div>
+                    )}</For>
+                  ) : (
+                    <p class="text-[11px] text-zinc-600 py-2">No assigned tasks</p>
+                  );
+                })()}
+              </div>
+            </Show>
+          </div>
+        </div>
+      </div>
 
       {/* Create Project Modal */}
       <Show when={showCreate()}>
@@ -414,34 +457,5 @@ export default function Projects() {
         </div>
       </Show>
     </div>
-    {/* Urgent tasks sidebar */}
-    <div class="w-72 shrink-0">
-      <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4 sticky top-5">
-        <h3 class="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">Upcoming Deadlines</h3>
-        <Show when={urgentTasks().length > 0} fallback={<p class="text-[11px] text-zinc-600">No upcoming deadlines</p>}>
-          <For each={urgentTasks()}>{(task, i) => {
-            const projId = taskProjectId(task);
-            return (
-              <A
-                href={projId ? `${basePath()}/project/${projId}` : '#'}
-                class={`block no-underline border-b border-[#1F1F23] last:border-b-0 py-2.5 hover:bg-[#1A1A1E] -mx-2 px-2 rounded transition-colors`}
-              >
-                <p class="text-[12px] text-white truncate leading-tight">{task.title}</p>
-                <div class="flex items-center gap-2 mt-1">
-                  <span class={`${
-                    task.priority === 'critical' ? 'dot-orange' :
-                    task.priority === 'high' ? 'dot-orange' :
-                    task.priority === 'low' ? 'dot-zinc' : 'dot-blue'
-                  }`}></span>
-                  <span class="text-[10px] text-zinc-500">{task.state}</span>
-                  <span class="text-[10px] text-zinc-600">{task.end ? new Date(task.end).toLocaleDateString() : '—'}</span>
-                </div>
-              </A>
-            );
-          }}</For>
-        </Show>
-      </div>
-    </div>
-  </div>
   );
 }

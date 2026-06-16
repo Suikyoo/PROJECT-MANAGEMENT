@@ -142,7 +142,7 @@ export default function AdminPage() {
               </thead>
               <tbody class="divide-y divide-[#1F1F23]">
                 <For each={displayedUsers()}>{(user) => (
-                  <tr class="text-zinc-300">
+                  <tr class="text-zinc-300 hover:bg-[#121214] transition-colors">
                     <td class="p-3 font-medium text-white">{user.name}</td>
                     <td class="p-3 text-zinc-500">{user.username}</td>
                     <td class="p-3">
@@ -195,7 +195,7 @@ export default function AdminPage() {
               </thead>
               <tbody class="divide-y divide-[#1F1F23]">
                 <For each={tokens() || []}>{(token) => (
-                  <tr class="text-zinc-300">
+                  <tr class="text-zinc-300 hover:bg-[#121214] transition-colors">
                     <td class="p-3 font-medium text-white">{token.name}</td>
                     <td class="p-3 text-zinc-500 text-[10px]">/client/{token.id}</td>
                     <td class="p-3 text-zinc-500">{new Date(token.dateIssued).toLocaleDateString()}</td>
@@ -246,7 +246,7 @@ export default function AdminPage() {
                 <For each={projects() || []}>{(project) => {
                   const hasAccess = () => (accessList() || []).some(a => a.projectId === project.id);
                   return (
-                    <div class="flex items-center justify-between bg-[#0B0B0C] px-3 py-2 rounded">
+                    <div class="flex items-center justify-between bg-[#0B0B0C] px-3 py-2 rounded hover:bg-[#121214] transition-colors">
                       <span class="text-xs text-zinc-300">{project.name}</span>
                       <Show when={hasAccess()}
                         fallback={

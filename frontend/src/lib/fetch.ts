@@ -229,6 +229,9 @@ export const uploadImage = async (file: File): Promise<{ url: string }> => {
 export const getProjectLog = (projectId: number) =>
   api<ProjectLog>('/projects/' + projectId + '/log');
 
+export const getProjectUsers = (projectId: number) =>
+  api<User[]>('/projects/' + projectId + '/users');
+
 export const setProjectLog = (projectId: number, content: string) =>
   api<ProjectLog>('/projects/' + projectId + '/log', {
     method: 'POST',
@@ -309,12 +312,18 @@ export const tokenCreateProjectFeedback = (tokenId: string, projectId: number, c
 export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
   tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);
 
+export const tokenGetProjectUsers = (tokenId: string, projectId: number) =>
+  tokenApi<User[]>('/projects/' + projectId + '/users', tokenId);
+
 export const tokenGetPhaseLog = (tokenId: string, phaseId: number) =>
   tokenApi<PhaseLog>('/phases/' + phaseId + '/log', tokenId);
 
 // Admin
 export const getUsers = () =>
   api<User[]>('/admin/users');
+
+export const getAllUsers = () =>
+  api<User[]>('/users');
 
 export const getPendingUsers = () =>
   api<User[]>('/admin/users/pending');

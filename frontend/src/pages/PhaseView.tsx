@@ -381,7 +381,7 @@ export default function PhaseView() {
                   </Show>
                   <div class="flex flex-col gap-2 mb-3">
                     <For each={feedbacks()}>{(fb) => (
-                      <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23]">
+                      <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23] hover:bg-[#121214] transition-colors">
                         <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
                         <div class="flex items-center gap-2 mt-1.5">
                           <span class="text-[10px] text-zinc-500">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>

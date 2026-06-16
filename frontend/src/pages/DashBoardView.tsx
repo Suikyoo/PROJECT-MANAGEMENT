@@ -4,19 +4,23 @@ import { useParams, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByProject, togglePhaseState,
   getProjectLog, setProjectLog, getProjectFeedbacks, createProjectFeedback, uploadImage,
+  getProjectUsers,
   tokenGetPhasesByProject, tokenGetTasksByProject, tokenGetProjectLog, tokenGetFeedbacksByProject,
-  tokenCreateProjectFeedback,
-  type Phase, type Task,
+  tokenCreateProjectFeedback, tokenGetProjectUsers,
+  acceptTask, submitTask, approveTask,
+  getTagsByTask, createTag, deleteTag,
+  tokenGetTagsByTask,
+  type Phase, type Task, type Tag, type User,
   ProjectLog, ProjectFeedback
 } from '../lib/fetch';
-import { session } from '../lib/store';
+import { session, getProjectById } from '../lib/store';
+import { nameToColor } from '../lib/misc';
+import TaskDetailPanel from '../components/TaskDetailPanel';
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon, ChevronDown, ChevronRight } from 'lucide-solid';
 import FileHandler from '@tiptap/extension-file-handler';
-import { Chart, ArcElement, DoughnutController, PolarAreaController, RadialLinearScale, BarElement, CategoryScale, LinearScale, BarController, Legend, Tooltip } from 'chart.js';
-Chart.register(ArcElement, DoughnutController, PolarAreaController, RadialLinearScale, BarElement, CategoryScale, LinearScale, BarController, Legend, Tooltip);
 
 export default function DashBoardView() {
   const params = useParams();
@@ -75,7 +79,7 @@ export default function DashBoardView() {
       // Provide more context for auth failures
       if (msg.includes('Unauthorized') || msg.includes('401') || msg.includes('403'))
         setPhasesError(`Access denied: you don't have permission to view phases for project #${pid}.`);
-      else
+        else
         setPhasesError(`Failed to load phases: ${msg}`);
     } finally {
       setPhasesLoading(false);
@@ -132,6 +136,7 @@ export default function DashBoardView() {
       loadTasks();
       loadLog();
       loadFeedbacks();
+      loadProjectUsers();
     } else {
       console.log("[DashBoard] createEffect — skipping (invalid projectId)");
     }
@@ -165,8 +170,86 @@ export default function DashBoardView() {
   });
   const isSupervisor = () => role() === 'Supervisor';
 
+  // --- Task detail panel state ---
+  const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
+  const [selectedTaskTags, setSelectedTaskTags] = createSignal<Tag[]>([]);
+
+  const loadSelectedTaskTags = async (taskId: number) => {
+    try {
+      const result = isClientMode()
+        ? await tokenGetTagsByTask(tokenId(), taskId)
+        : await getTagsByTask(taskId);
+      setSelectedTaskTags(result as Tag[]);
+    } catch {
+      setSelectedTaskTags([]);
+    }
+  };
+
+  const openTaskDetail = (task: Task) => {
+    setSelectedTask(task);
+    loadSelectedTaskTags(task.id);
+  };
+
+  const handleAddTag = async (taskId: number, name: string) => {
+    try {
+      const tag = await createTag(taskId, name);
+      setSelectedTaskTags(prev => [...prev, tag]);
+    } catch { /* handled silently */ }
+  };
+
+  const handleRemoveTag = async (tagId: number, taskId: number) => {
+    try {
+      await deleteTag(tagId);
+      setSelectedTaskTags(prev => prev.filter(t => t.id !== tagId));
+    } catch { /* handled silently */ }
+  };
+
+  const refetchAllData = async () => {
+    await loadPhases();
+    await loadTasks();
+  };
+
+  const getUserById = (id: number | null): User | null => {
+    if (!id) return null;
+    const u = (projectUsers() || []).find(u => u.id === id);
+    return u || null;
+  };
+
   // Edit log is only available in insider mode (not client/token mode)
   const canEditLog = () => isSupervisor() && !isClientMode();
+
+  const project = () => getProjectById(projectId());
+  const tasks = () => allTasks() || [];
+
+  const progress = createMemo(() => {
+    const all = tasks();
+    if (all.length === 0) return 0;
+    const done = all.filter(t => t.state === 'QA approved' || t.state === 'to review').length;
+    return done / all.length;
+  });
+
+  const taskStateBreakdown = createMemo(() => {
+    const all = tasks();
+    const counts: Record<string, number> = { backlog: 0, 'in-progress': 0, 'to review': 0, 'QA approved': 0 };
+    all.forEach(t => { if (counts.hasOwnProperty(t.state)) counts[t.state]++; });
+    return counts;
+  });
+
+  const getInitials = (name: string) => {
+    const parts = name.split(' ');
+    return parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  };
+
+  const statusDotColor = (state: string) => {
+    const s = state.toLowerCase();
+    if (s === 'active' || s === 'mvp') return 'bg-blue-500';
+    if (s === 'completed' || s === 'complete' || s === 'done') return 'bg-emerald-500';
+    if (s === 'on hold' || s === 'on_hold' || s === 'hold') return 'bg-amber-500';
+    if (s === 'delayed' || s === 'at risk' || s === 'at_risk') return 'bg-red-500';
+    return 'bg-zinc-500';
+  };
 
   // Create editor when element is available and edit modal is open
   createEffect(() => {
@@ -193,13 +276,13 @@ export default function DashBoardView() {
               fileReader.readAsDataURL(file)
               fileReader.onload = () => {
                 currentEditor
-                .chain()
-                .insertContentAt(pos, {
-                  type: 'image',
-                  attrs: { src: fileReader.result },
-                })
-                .focus()
-                .run()
+                  .chain()
+                  .insertContentAt(pos, {
+                    type: 'image',
+                    attrs: { src: fileReader.result },
+                  })
+                  .focus()
+                  .run()
               }
             })
           },
@@ -212,13 +295,13 @@ export default function DashBoardView() {
               fileReader.readAsDataURL(file)
               fileReader.onload = () => {
                 currentEditor
-                .chain()
-                .insertContentAt(currentEditor.state.selection.anchor, {
-                  type: 'image',
-                  attrs: { src: fileReader.result },
-                })
-                .focus()
-                .run()
+                  .chain()
+                  .insertContentAt(currentEditor.state.selection.anchor, {
+                    type: 'image',
+                    attrs: { src: fileReader.result },
+                  })
+                  .focus()
+                  .run()
               }
             })
           },
@@ -294,6 +377,26 @@ export default function DashBoardView() {
     }
   };
 
+  // --- Project Users ---
+  const [projectUsers, setProjectUsers] = createSignal<User[] | undefined>(undefined);
+  const [projectUsersLoading, setProjectUsersLoading] = createSignal(true);
+
+  const loadProjectUsers = async () => {
+    const pid = projectId();
+    if (isNaN(pid) || pid <= 0) return;
+    setProjectUsersLoading(true);
+    try {
+      const result = isClientMode()
+        ? await tokenGetProjectUsers(tokenId(), pid)
+        : await getProjectUsers(pid);
+      setProjectUsers(result);
+    } catch (e: any) {
+      console.error("[DashBoard] loadProjectUsers ERROR:", e);
+    } finally {
+      setProjectUsersLoading(false);
+    }
+  };
+
   const [newFeedback, setNewFeedback] = createSignal('');
   const [feedbackAuthorName, setFeedbackAuthorName] = createSignal('');
   const [feedbackLoading, setFeedbackLoading] = createSignal(false);
@@ -320,164 +423,90 @@ export default function DashBoardView() {
     }
   };
 
-  const tasks = () => allTasks() || [];
-
-  // --- Chart data memos ---
-  const taskStateCounts = createMemo(() => {
-    const counts: Record<string, number> = { backlog: 0, 'in-progress': 0, 'to review': 0, 'QA approved': 0 };
-    tasks().forEach(t => { if (counts.hasOwnProperty(t.state)) counts[t.state]++; });
-    return counts;
-  });
-
-  const phaseStateCounts = createMemo(() => {
-    const counts: Record<string, number> = {};
-    (phases() || []).forEach(p => { counts[p.state] = (counts[p.state] || 0) + 1; });
-    return counts;
-  });
-
-  const priorityCounts = createMemo(() => {
-    const counts: Record<string, number> = {};
-    tasks().forEach(t => { const p = t.priority || 'medium'; counts[p] = (counts[p] || 0) + 1; });
-    return counts;
-  });
-
-  // Chart refs
-  let taskBarCanvas: HTMLCanvasElement | undefined;
-  let taskBarChart: Chart | undefined;
-  let phasePolarCanvas: HTMLCanvasElement | undefined;
-  let phasePolarChart: Chart | undefined;
-  let priorityDoughnutCanvas: HTMLCanvasElement | undefined;
-  let priorityDoughnutChart: Chart | undefined;
-
-  const darkDoughnutPlugins = {
-    legend: { display: true, position: 'bottom' as const, labels: { color: '#71717A', font: { size: 9 }, padding: 10, usePointStyle: true, pointStyleWidth: 6 } },
-    tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 }
-  };
-
-  const darkBarPlugins = {
-    legend: { display: false },
-    tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 }
-  };
-
-  const renderTaskBar = () => {
-    if (!taskBarCanvas) return;
-    const counts = taskStateCounts();
-    const labels = ['Backlog', 'In Progress', 'To Review', 'QA Approved'];
-    const data = [counts.backlog, counts['in-progress'], counts['to review'], counts['QA approved']];
-    if (taskBarChart) taskBarChart.destroy();
-    try {
-      taskBarChart = new Chart(taskBarCanvas, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [{ data, backgroundColor: ['#71717A', '#3B82F6', '#F97316', '#22C55E'], borderRadius: 3, borderSkipped: false }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: darkBarPlugins,
-          scales: {
-            x: { ticks: { color: '#71717A', font: { size: 9 }, stepSize: 1, precision: 0 }, grid: { color: '#1F1F23' }, beginAtZero: true },
-            y: { ticks: { color: '#A1A1AA', font: { size: 10 }, padding: 4 }, grid: { display: false } }
-          }
-        }
-      });
-    } catch (e) { console.error('[DashBoard] renderTaskBar failed:', e); }
-  };
-
-  const renderPhasePolar = () => {
-    if (!phasePolarCanvas) return;
-    const counts = phaseStateCounts();
-    const entries = Object.entries(counts);
-    const colorMap: Record<string, string> = { 'UAT': '#F97316', 'Complete': '#22C55E', 'In Progress': '#3B82F6' };
-    const colors = ['#A855F7', '#EC4899', '#14B8A6', '#F59E0B'];
-    if (phasePolarChart) phasePolarChart.destroy();
-    try {
-      phasePolarChart = new Chart(phasePolarCanvas, {
-        type: 'polarArea',
-        data: {
-          labels: entries.map(e => e[0]),
-          datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map((e, i) => colorMap[e[0]] || colors[i % colors.length]), borderColor: '#121214', borderWidth: 2 }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: true, position: 'bottom', labels: { color: '#71717A', font: { size: 9 }, padding: 10, usePointStyle: true, pointStyleWidth: 6 } },
-            tooltip: { backgroundColor: '#1F1F23', titleColor: '#D4D4D8', bodyColor: '#D4D4D8', padding: 8, cornerRadius: 4 }
-          },
-          scales: { r: { ticks: { color: '#71717A', font: { size: 8 }, backdropColor: 'transparent', stepSize: 1, precision: 0 }, grid: { color: '#1F1F23' }, pointLabels: { color: '#A1A1AA', font: { size: 9 } } } }
-        }
-      });
-    } catch (e) { console.error('[DashBoard] renderPhasePolar failed:', e); }
-  };
-
-  const renderPriorityDoughnut = () => {
-    if (!priorityDoughnutCanvas) return;
-    const counts = priorityCounts();
-    const order = ['critical', 'high', 'medium', 'low'];
-    const labels = ['Critical', 'High', 'Medium', 'Low'];
-    const colors = ['#EF4444', '#F97316', '#3B82F6', '#71717A'];
-    if (priorityDoughnutChart) priorityDoughnutChart.destroy();
-    try {
-      priorityDoughnutChart = new Chart(priorityDoughnutCanvas, {
-        type: 'doughnut',
-        data: { labels, datasets: [{ data: order.map(o => counts[o] || 0), backgroundColor: colors, borderColor: '#121214', borderWidth: 2, hoverBorderColor: '#27272A' }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: darkDoughnutPlugins }
-      });
-    } catch (e) { console.error('[DashBoard] renderPriorityDoughnut failed:', e); }
-  };
-
-  createEffect(() => { taskStateCounts(); renderTaskBar(); });
-  createEffect(() => { phaseStateCounts(); renderPhasePolar(); });
-  createEffect(() => { priorityCounts(); renderPriorityDoughnut(); });
-
   return (
     <div class="max-w-5xl">
       <Show when={error()}><div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{error()}<button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button></div></Show>
 
-      {/* Stats Cards — compact row */}
-      <div class="grid grid-cols-4 gap-3 mb-5">
-        <div class="bg-[#121214] border border-[#1F1F23] p-3 rounded-lg">
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Total</div>
-          <div class="text-xl font-bold mt-1 text-white">{tasks().length}</div>
-        </div>
-        <div class="bg-[#121214] border border-[#1F1F23] p-3 rounded-lg">
-          <div class="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">In Progress</div>
-          <div class="text-xl font-bold mt-1 text-blue-400">{tasks().filter(t => t.state === 'in-progress').length}</div>
-        </div>
-        <div class="bg-[#121214] border border-[#1F1F23] p-3 rounded-lg">
-          <div class="text-[10px] text-orange-400 uppercase tracking-wider font-semibold">To Review</div>
-          <div class="text-xl font-bold mt-1 text-orange-400">{tasks().filter(t => t.state === 'to review').length}</div>
-        </div>
-        <div class="bg-[#121214] border border-[#1F1F23] p-3 rounded-lg">
-          <div class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold">Approved</div>
-          <div class="text-xl font-bold mt-1 text-emerald-400">{tasks().filter(t => t.state === 'QA approved').length}</div>
-        </div>
-      </div>
-
-      {/* Charts Row — slim 3-col */}
-      <Show when={!tasksLoading() && !phasesLoading()}>
-        <div class="grid grid-cols-3 gap-3 mb-5">
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Task States</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { taskBarCanvas = el; setTimeout(() => renderTaskBar(), 0); }}></canvas>
+      {/* Project Header */}
+      <Show when={project()}>
+        <div class="border-b border-[#1F1F23] pb-5 mb-5">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <h2 class="text-lg font-semibold text-white">{project()!.name}</h2>
+                <span class={`inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-full ${
+project()!.state === 'active' ? 'bg-green-500/10 text-green-400' :
+project()!.state === 'on hold' ? 'bg-yellow-500/10 text-yellow-400' :
+project()!.state === 'completed' ? 'bg-blue-500/10 text-blue-400' :
+'bg-zinc-500/10 text-zinc-400'
+}`}>
+                  <span class={`w-1 h-1 rounded-full ${statusDotColor(project()!.state)}`} />
+                  {project()!.state}
+                </span>
+              </div>
+              <p class="text-sm text-zinc-500">{project()!.description || 'No description'}</p>
             </div>
           </div>
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Phase States</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { phasePolarCanvas = el; setTimeout(() => renderPhasePolar(), 0); }}></canvas>
+          <div class="flex items-center gap-6 text-xs text-zinc-500">
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono">{Math.round(progress() * 100)}% complete</span>
+            </div>
+            <div class="flex -space-x-1 ml-auto">
+              <For each={(projectUsers() || []).slice(0, 6)}>
+                {(user) => {
+                  const color = nameToColor(user.name || user.username);
+                  return (
+                    <div
+                      title={user.name || user.username}
+                      class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0 ring-1 ring-[#0B0B0C]"
+                      style={{ background: color.bg }}
+                    >
+                      {getInitials(user.name || user.username)}
+                    </div>
+                  );
+                }}
+              </For>
+              <Show when={(projectUsers() || []).length > 6}>
+                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-zinc-400 bg-[#1F1F23] shrink-0 ring-1 ring-[#0B0B0C]">
+                  +{(projectUsers() || []).length - 6}
+                </span>
+              </Show>
             </div>
           </div>
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-3">
-            <h3 class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Priority Breakdown</h3>
-            <div style="height: 130px;">
-              <canvas ref={(el) => { priorityDoughnutCanvas = el; setTimeout(() => renderPriorityDoughnut(), 0); }}></canvas>
-            </div>
+          {/* Progress bar */}
+          <div class="mt-3 h-1 rounded-full bg-border-light overflow-hidden">
+            <div class="h-full rounded-full bg-zinc-200 transition-all duration-300" style={{ width: `${Math.round(progress() * 100)}%` }} />
           </div>
+          {/* Detailed stacked progress bar */}
+          <Show when={tasks().length > 0}>
+            {(() => {
+              const b = taskStateBreakdown();
+              const total = tasks().length;
+              const segments = [
+                { label: 'Approved', count: b['QA approved'], color: 'bg-emerald-500' },
+                { label: 'To Review', count: b['to review'], color: 'bg-orange-500' },
+                { label: 'In Progress', count: b['in-progress'], color: 'bg-blue-500' },
+                { label: 'Backlog', count: b.backlog, color: 'bg-zinc-600' },
+              ].filter(s => s.count > 0);
+              return (
+                <div class="mt-2">
+                  <div class="flex h-[4px] rounded-full overflow-hidden gap-px bg-[#27272A]">
+                    <For each={segments}>{(s) => (
+                      <div class={`${s.color} h-full transition-all duration-300`} style={{ width: `${(s.count / total) * 100}%` }} title={`${s.label}: ${s.count}`} />
+                    )}</For>
+                  </div>
+                  <div class="flex gap-3 mt-1 flex-wrap">
+                    <For each={segments}>{(s) => (
+                      <span class="text-[9px] text-zinc-500 flex items-center gap-1">
+                        <span class={`w-1.5 h-1.5 rounded-full ${s.color}`} />
+                        {s.label} {s.count}
+                      </span>
+                    )}</For>
+                  </div>
+                </div>
+              );
+            })()}
+          </Show>
         </div>
       </Show>
 
@@ -505,7 +534,7 @@ export default function DashBoardView() {
         </div>
       </Show>
 
-      {/* Phases — collapsible list */}
+      {/* Phases — reference-style flat list */}
       <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Phases</h3>
       <Show when={phasesError()}>
         <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-2">
@@ -516,113 +545,120 @@ export default function DashBoardView() {
       <Show when={!phasesLoading() && (phases() || []).length === 0}>
         <p class="text-zinc-500 text-xs">No phases found for this project.</p>
       </Show>
-      <div class="flex flex-col gap-1.5 mb-5">
-        <For each={phases()}>{(phase) => {
-          const isCollapsed = () => !collapsedPhases().has(phase.id);
+      <div class="space-y-3 mb-5">
+        <For each={phases()}>{(phase, idx) => {
           const phaseTasks = () => (allTasks() || []).filter((t: Task) => t.phaseId === phase.id);
+          const phaseProgress = () => 1 - (phaseTasks().filter(p => p.state === "backlog").length / phaseTasks().length)
+          const completed = phase.state === 'Complete';
           return (
-          <div class="bg-[#121214] rounded-lg border border-[#1F1F23] overflow-hidden">
-            {/* Phase header — highlighted, clickable */}
-            <div
-              class="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#1A1A1E] transition-colors select-none"
-              onClick={() => toggleCollapse(phase.id)}
-            >
-              <div class="flex items-center gap-2 min-w-0 flex-1">
-                <button class="text-zinc-500 hover:text-zinc-300 cursor-pointer bg-transparent border-none p-0 flex items-center" onClick={(e) => { e.stopPropagation(); toggleCollapse(phase.id); }}>
-                  {isCollapsed() ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </button>
-                <A href={isClientMode() ? `/client/${tokenId()}/project/${projectId()}/phase/${phase.id}` : `/insider/project/${projectId()}/phase/${phase.id}`}>
-                <h4 class="text-[12px] font-semibold text-white hover:text-blue-600 truncate">{phase.name}</h4>
-                </A>
-                <span class={`status-chip ${phase.state === 'Complete' ? 'status-chip-green' : 'status-chip-orange'}`}>{phase.state}</span>
-                <span class="text-[10px] text-zinc-600">{phaseTasks().length} task{phaseTasks().length !== 1 ? 's' : ''}</span>
-              </div>
-              {/* Per-phase task state breakdown — slim bar + % labels */}
-              {(() => {
-                const pt = phaseTasks();
-                const total = pt.length || 1;
-                const qa = pt.filter((t: Task) => t.state === 'QA approved').length;
-                const review = pt.filter((t: Task) => t.state === 'to review').length;
-                const inProg = pt.filter((t: Task) => t.state === 'in-progress').length;
-                const backlog = pt.filter((t: Task) => t.state === 'backlog').length;
-                const qaPct = Math.round((qa / total) * 100);
-                const rvPct = Math.round((review / total) * 100);
-                const ipPct = Math.round((inProg / total) * 100);
-                const blPct = Math.round((backlog / total) * 100);
-                const parts: string[] = [];
-                if (qaPct > 0) parts.push(`${qaPct}% QA`);
-                if (rvPct > 0) parts.push(`${rvPct}% Rv`);
-                if (ipPct > 0) parts.push(`${ipPct}% IP`);
-                if (blPct > 0) parts.push(`${blPct}% BL`);
-                return (
-                  <div class="flex items-center gap-1.5 shrink-0">
-                    <span class="text-[11px] text-zinc-200 whitespace-nowrap leading-none font-semibold">{parts.length > 0 ? parts.join(' · ') : 'No tasks'}</span>
-                    {pt.length > 0 ? (
-                      <div class="h-1.5 w-20 rounded-full bg-[#27272A] flex overflow-hidden" title={parts.join(' · ')}>
-                        {qa > 0 && <div class="phase-segment phase-segment-green" style={{ width: `${qaPct}%` }}></div>}
-                        {review > 0 && <div class="phase-segment phase-segment-orange" style={{ width: `${rvPct}%` }}></div>}
-                        {inProg > 0 && <div class="phase-segment phase-segment-blue" style={{ width: `${ipPct}%` }}></div>}
-                        {backlog > 0 && <div class="phase-segment phase-segment-zinc" style={{ width: `${blPct}%` }}></div>}
-                      </div>
-                    ) : (
-                      <div class="h-1.5 w-20 rounded-full bg-[#27272A]"></div>
-                    )}
+            <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden">
+              {/* Phase header */}
+              <div class="px-4 py-3 flex items-center gap-3 hover:bg-border">
+                <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-semibold shrink-0 ${completed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                  {completed ? (
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                  ) : idx() + 1}
+                </div>
+                <div class="flex-1 min-w-0 relative">
+                  <div class="flex items-center gap-2">
+                    <A href={isClientMode() ? `/client/${tokenId()}/project/${projectId()}/phase/${phase.id}` : `/insider/project/${projectId()}/phase/${phase.id}`} class="no-underline">
+                      <span class="text-sm font-medium text-zinc-200 hover:text-blue-400">{phase.name}</span>
+                    </A>
+                    <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full ${completed ? 'bg-emerald-500/15 text-emerald-400' : 'bg-orange-500/15 text-orange-400'}`}>{phase.state}</span>
                   </div>
-                );
-              })()}
-              <Show when={isSupervisor() && !isClientMode()}>
-                <button onClick={(e) => { e.stopPropagation(); handleTogglePhase(phase.id); }} class="bg-[#1F1F23] hover:bg-[#27272A] text-zinc-400 hover:text-white text-[10px] py-1 px-2.5 rounded-md cursor-pointer transition-colors border border-[#27272A] ml-2">Toggle</button>
+                  <div class="flex items-center gap-3 mt-1 text-[10px] font-mono text-zinc-500">
+                    <span>{phaseTasks().length} task{phaseTasks().length !== 1 ? 's' : ''}</span>
+                    <Show when={isSupervisor() && !isClientMode()}>
+                      <button onClick={() => handleTogglePhase(phase.id)} class="text-[9px] text-zinc-500 hover:text-zinc-300 cursor-pointer bg-transparent border-none p-0 underline underline-offset-2">Toggle state</button>
+
+                    </Show>
+                  </div>
+
+                  {/* Progress bar */}
+                  <p class="text-xs text-zinc-500 absolute -translate-y-4 right-0">{Math.round(phaseProgress() * 100)}%</p>
+                  <div class="mt-3 h-1 rounded-full bg-zinc-700 overflow-hidden">
+                    <div class="h-full rounded-full bg-zinc-500 transition-all duration-300" style={{ width: `${Math.round(phaseProgress() * 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+              {/* Phase tasks */}
+
+              <Show when={phaseTasks().length > 0}>
+                <div class="border-t border-[#1F1F23] divide-y divide-[#1F1F23]">
+                  <For each={phaseTasks()}>{(task) => (
+                    <div
+                      onClick={() => openTaskDetail(task)}
+                      class="px-4 py-2 cursor-pointer flex items-center gap-3 no-underline  hover:bg-border-medium"
+                    >
+                      <span class={`w-2 h-2 rounded-full shrink-0 ${
+task.state === 'backlog' ? 'bg-zinc-500' :
+task.state === 'in-progress' ? 'bg-blue-500' :
+task.state === 'to review' ? 'bg-orange-500' :
+'bg-emerald-500'
+}`} />
+                      <span class="text-xs text-zinc-300 flex-1 truncate">{task.title}</span>
+                      <span class={`text-[9px] font-semibold uppercase shrink-0 ${
+task.priority === 'critical' ? 'text-red-400' :
+task.priority === 'high' ? 'text-orange-400' :
+task.priority === 'low' ? 'text-zinc-500' : 'text-blue-400'
+}`}>{task.priority || 'med'}</span>
+                      <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
+task.state === 'backlog' ? 'bg-zinc-800 text-zinc-400' :
+task.state === 'in-progress' ? 'bg-blue-500/15 text-blue-400' :
+task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
+'bg-emerald-500/15 text-emerald-400'
+}`}>{task.state}</span>
+
+                      {(() => {
+                        const dev = getUserById(task.developerId);
+                        if (!dev) return <span class="text-zinc-700 shrink-0">—</span>;
+                        const c = nameToColor(dev.name || dev.username);
+                        return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.username)}</span>;
+                      })()}
+
+                      {task.end && (
+                        <span class="text-[10px] font-mono text-zinc-600 shrink-0 w-16 text-right">{new Date(task.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      )}
+                    </div>
+                  )}</For>
+                </div>
               </Show>
             </div>
-            {/* Collapsible task list */}
-            <Show when={!isCollapsed()}>
-              <div class="border-t border-[#1F1F23]">
-                <Show when={phaseTasks().length > 0} fallback={
-                  <div class="px-3 py-4 text-center text-[11px] text-zinc-600">No tasks in this phase</div>
-                }>
-                  <For each={phaseTasks()}>{(task) => (
-                    <A
-                      href={isClientMode() ? `/client/${tokenId()}/project/${projectId()}/task/${task.id}` : `/insider/project/${projectId()}/task/${task.id}`}
-                      class={`px-3 py-2 flex items-center gap-2.5 border-b border-[#1F1F23] last:border-b-0 cursor-pointer hover:brightness-110 transition-all no-underline group ${
-                        task.state === 'backlog' ? 'bg-zinc-900/40' :
-                        task.state === 'in-progress' ? 'bg-blue-950/25' :
-                        task.state === 'to review' ? 'bg-orange-950/25' :
-                        'bg-emerald-950/25'
-                      }`}
-                    >
-                      {/* State dot */}
-                      <span class={`w-2 h-2 rounded-full shrink-0 ${
-                        task.state === 'backlog' ? 'bg-zinc-500' :
-                        task.state === 'in-progress' ? 'bg-blue-500' :
-                        task.state === 'to review' ? 'bg-orange-500' :
-                        'bg-emerald-500'
-                      }`} />
-                      {/* Task info */}
-                      <div class="flex-1 min-w-0 flex items-center gap-2">
-                        <h4 class="text-[11px] font-medium text-white leading-tight truncate">{task.title}</h4>
-                        <span class={`text-[9px] font-semibold uppercase shrink-0 ${
-                          task.priority === 'critical' ? 'text-red-400' :
-                          task.priority === 'high' ? 'text-orange-400' :
-                          task.priority === 'low' ? 'text-zinc-500' : 'text-blue-400'
-                        }`}>{task.priority || 'med'}</span>
-                        {task.end && (
-                          <span class="text-[9px] text-zinc-600 shrink-0">{new Date(task.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                        )}
-                      </div>
-                      <span class={`text-[9px] font-medium shrink-0 ${
-                        task.state === 'backlog' ? 'text-zinc-500' :
-                        task.state === 'in-progress' ? 'text-blue-400' :
-                        task.state === 'to review' ? 'text-orange-400' :
-                        'text-emerald-400'
-                      }`}>{task.state}</span>
-                    </A>
-                  )}</For>
-                </Show>
-              </div>
-            </Show>
-          </div>
-        )}}</For>
+          )}}</For>
       </div>
+
+      {/* Team Section */}
+      <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Team</h3>
+      <Show when={!projectUsersLoading()} fallback={<p class="text-zinc-500 text-xs">Loading team...</p>}>
+        <Show when={(projectUsers() || []).length > 0} fallback={
+          <p class="text-zinc-600 text-[11px] mb-5">No team members associated with this project yet.</p>
+        }>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+            <For each={projectUsers() || []}>{(user) => {
+              const userTasks = tasks().filter(t => t.developerId === user.id || t.supervisorId === user.id);
+              const roleColors: Record<string, string> = {
+                Supervisor: 'bg-purple-500/15 text-purple-400',
+                Developer: 'bg-blue-500/15 text-blue-400',
+                QA: 'bg-emerald-500/15 text-emerald-400',
+                Client: 'bg-orange-500/15 text-orange-400',
+              };
+              return (
+                <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4 flex items-start gap-3">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                    {(user.name || user.username).charAt(0).toUpperCase()}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-sm text-zinc-200">{user.name}</div>
+                    <div class="text-[10px] font-mono text-zinc-500">@{user.username}</div>
+                    <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full mt-1 ${roleColors[user.role] || 'bg-zinc-800 text-zinc-400'}`}>{user.role}</span>
+                    <div class="text-[10px] font-mono text-zinc-600 mt-1">{userTasks.length} tasks</div>
+                  </div>
+                </div>
+              );
+            }}</For>
+          </div>
+        </Show>
+      </Show>
 
       {/* Feedback Section — compact */}
       <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Activity</h3>
@@ -725,6 +761,26 @@ export default function DashBoardView() {
             <div class="prose prose-invert prose-sm max-w-none text-zinc-300 text-[13px] [&_img]:rounded-md [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={initialLogContent()?.content || '<p class="text-zinc-500 italic text-[12px]">No content yet.</p>'} />
           </div>
         </div>
+      </Show>
+
+      {/* TASK DETAILS SLIDE-IN PANEL */}
+      <Show when={selectedTask()}>
+        <TaskDetailPanel
+          task={selectedTask()!}
+          tags={selectedTaskTags()}
+          users={projectUsers() || []}
+          backUrl={isClientMode() ? `/client/${tokenId()}/project/${projectId()}` : `/insider/project/${projectId()}`}
+          onClose={() => setSelectedTask(null)}
+          onModified={refetchAllData}
+          role={role()}
+          isClientMode={isClientMode()}
+          isSupervisor={isSupervisor()}
+          onAccept={async (id) => { await acceptTask(id); }}
+          onSubmit={async (id) => { await submitTask(id); }}
+          onApprove={async (id) => { await approveTask(id); }}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
+        />
       </Show>
     </div>
   );

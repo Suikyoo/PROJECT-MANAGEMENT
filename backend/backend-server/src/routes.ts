@@ -10,6 +10,7 @@ import {
   getProjectLog, getPhaseLog,
   getAllTokens, getAllowedProjectsByTokenId, getAccessByTokenId,
   getTagsByTaskId, getTagsByProjectId, getTokenById,
+  getProjectUsers,
 } from "./lib/db/getter.ts"
 import { 
   createUser, approveUser, setUserRole, deleteUser,
@@ -184,6 +185,12 @@ export function configRoutes(app: Express) {
     return res.json(feedback);
   });
 
+  // ---- User routes ----
+
+  app.get("/users", authorize, async (_, res) => {
+    return res.json(await getUsers());
+  });
+
   // ---- Admin-only routes ----
 
   app.get("/admin/users/pending", authorize, requireRole("Admin"), async (_, res) => {
@@ -325,6 +332,11 @@ export function configRoutes(app: Express) {
   app.get("/projects/:id/tags", authorize, async (req, res) => {
     const projectId = Number(req.params.id);
     return res.json(await getTagsByProjectId(projectId));
+  });
+
+  app.get("/projects/:id/users", authorize, async (req, res) => {
+    const projectId = Number(req.params.id);
+    return res.json(await getProjectUsers(projectId));
   });
 
   // Add a tag to a task
@@ -530,6 +542,16 @@ export function configRoutes(app: Express) {
       return res.status(403).json({ error: "Unauthorized" });
     }
     return res.json(await getTagsByProjectId(projectId));
+  });
+
+  app.get("/token/:token_id/projects/:id/users", validate, async (req, res) => {
+    const projectId = Number(req.params.id);
+    const tokenId = res.locals.tokenId!;
+    const allowed = await getAllowedProjectsByTokenId(tokenId);
+    if (!allowed.find(p => p.id === projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    return res.json(await getProjectUsers(projectId));
   });
 
   app.get("/token/:token_id/tasks/:id/tags", validate, async (req, res) => {

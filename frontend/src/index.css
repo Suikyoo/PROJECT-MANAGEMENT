@@ -123,3 +123,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin-left: 0;
   color: #A1A1AA;
 }
+
+/* Slide-in from right animation */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

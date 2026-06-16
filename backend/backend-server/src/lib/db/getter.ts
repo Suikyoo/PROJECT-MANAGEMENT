@@ -1,4 +1,4 @@
-import { eq, type InferSelectModel } from "drizzle-orm";
+import { eq, type InferSelectModel, inArray, and, isNotNull, sql } from "drizzle-orm";
 import { db } from "./index.ts";
 import { phaseTable, userTable, projectTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable } from "./schema.ts";
 
@@ -128,4 +128,25 @@ export async function getTagsByProjectId(projectId: number): Promise<InferSelect
     .innerJoin(taskTable, eq(tagTable.taskId, taskTable.id))
     .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
     .where(eq(phaseTable.projectId, projectId));
+}
+
+// Get all distinct users involved in a project (as supervisors or developers of its tasks)
+export async function getProjectUsers(projectId: number): Promise<InferSelectModel<typeof userTable>[]> {
+  const supervisorIds = await db
+    .selectDistinct({ id: taskTable.supervisorId })
+    .from(taskTable)
+    .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
+    .where(eq(phaseTable.projectId, projectId));
+
+  const developerIds = await db
+    .selectDistinct({ id: taskTable.developerId })
+    .from(taskTable)
+    .innerJoin(phaseTable, eq(taskTable.phaseId, phaseTable.id))
+    .where(and(eq(phaseTable.projectId, projectId), isNotNull(taskTable.developerId)));
+
+  const allIds = [...new Set([...supervisorIds.map(r => r.id), ...developerIds.map(r => r.id!)])];
+
+  if (allIds.length === 0) return [];
+
+  return await db.select().from(userTable).where(inArray(userTable.id, allIds));
 }

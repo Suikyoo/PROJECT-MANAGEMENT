@@ -881,7 +881,7 @@ async function seed() {
   }
   ]
   await db.insert(taskTable).values(tasks.map(t => {
-    return {...t, supervisorId: roel.id, start: new Date(t.start), end: new Date(t.end), priority: t.priority as Priority}
+    return {...t, supervisorId: roel.id, developerId: (t.state != "backlog") ? roel.id: undefined, start: new Date(t.start), end: new Date(t.end), priority: t.priority as Priority}
   }));
 
   const tags = [
