@@ -20,5 +20,12 @@ HOW TO RUN:
 `npm run super-start`
 
 
+# navigate to /login in frontend:
+
+## credentials:
+- username: francis
+- password: password123
+
+
 
 
