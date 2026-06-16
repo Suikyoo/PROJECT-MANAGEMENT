@@ -1,16 +1,18 @@
 // ~/src/pages/PhaseView.tsx
-import { For, Show, createSignal, createResource, createEffect, untrack } from 'solid-js';
-import { useParams } from '@solidjs/router';
+import { For, Show, createSignal, createEffect, createMemo, untrack } from 'solid-js';
+import { useParams, A } from '@solidjs/router';
 import {
+  getPhasesByProject, getTasksByPhase, togglePhaseState,
   getPhaseLog, setPhaseLog, getPhaseFeedbacks, createPhaseFeedback, uploadImage,
+  tokenGetPhasesByProject, tokenGetTasksByPhase,
   tokenGetPhaseLog, tokenGetFeedbacksByPhase, tokenCreatePhaseFeedback,
-  type PhaseFeedback, PhaseLog
+  type Phase, type Task, type PhaseFeedback, PhaseLog
 } from '../lib/fetch';
 import { session } from '../lib/store';
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
-import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon } from 'lucide-solid';
+import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon, ArrowLeft } from 'lucide-solid';
 import FileHandler from '@tiptap/extension-file-handler';
 
 export default function PhaseView() {
@@ -21,33 +23,85 @@ export default function PhaseView() {
 
   const [error, setError] = createSignal('');
 
+  // Derive project context from URL
+  const dashboardProjectId = () => Number(params.project_id);
+
+  // Manual signal-based state to avoid createResource loading-state bugs
+  const [phaseData, setPhaseData] = createSignal<{ phase: Phase | null; taskCount: number; tasks: Task[] } | undefined>(undefined);
+  const [phaseDataLoading, setPhaseDataLoading] = createSignal(true);
+  const phase = () => phaseData()?.phase || null;
+  const phaseTaskCount = () => phaseData()?.taskCount || 0;
+  const phaseTasks = () => phaseData()?.tasks || [];
+
+  const loadPhaseData = async () => {
+    const pid = dashboardProjectId();
+    const phid = phaseId();
+    if (isNaN(pid) || pid <= 0 || isNaN(phid) || phid <= 0) return;
+    setPhaseDataLoading(true);
+    try {
+      const allPhases = isClientMode()
+        ? await tokenGetPhasesByProject(tokenId(), pid)
+        : await getPhasesByProject(pid);
+      const found = allPhases.find((ph: Phase) => ph.id === phid) || null;
+      const tasks = isClientMode()
+        ? await tokenGetTasksByPhase(tokenId(), phid)
+        : await getTasksByPhase(phid);
+      setPhaseData({ phase: found, taskCount: tasks.length, tasks: tasks as Task[] });
+    } catch {
+      setPhaseData({ phase: null, taskCount: 0, tasks: [] });
+    } finally {
+      setPhaseDataLoading(false);
+    }
+  };
+
+  const handleTogglePhase = async () => {
+    try {
+      await togglePhaseState(phaseId());
+      loadPhaseData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed');
+    }
+  };
+
   // --- Phase Log ---
   const [editor_ref, setEditorRef] = createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<Editor>();
 
-  const fetchLogFn = async (pid: number) => {
-    try {
-      if (isClientMode()) return await tokenGetPhaseLog(tokenId(), pid);
-      const res = await getPhaseLog(pid);
-      return 'error' in res ? { id: 0, phaseId: pid, content: '' } : res;
-    } catch {
-      return { phaseId: pid, content: '' };
-    }
-  };
+  const [initialLogContent, setInitialLogContent] = createSignal<PhaseLog | { phaseId: number; content: string } | undefined>(undefined);
+  const [logLoading, setLogLoading] = createSignal(true);
+  const refetchInitialLog = () => loadLog();
 
-  const [initialLogContent, { refetch: refetchInitialLog }] = createResource(
-    () => phaseId(),
-    (pid) => fetchLogFn(pid)
-  );
-  const [logContent, { refetch: refetchLog, mutate: mutateLog }] = createResource(
-    () => phaseId(),
-    (pid) => fetchLogFn(pid)
-  );
+  const [logContent, setLogContent] = createSignal<PhaseLog | { phaseId: number; content: string } | undefined>(undefined);
+  const mutateLog = (fn: (prev: PhaseLog | { phaseId: number; content: string } | undefined) => PhaseLog | { phaseId: number; content: string } | undefined) => setLogContent(fn(logContent()));
+  const refetchLog = () => loadLog();
+
   const [logSaving, setLogSaving] = createSignal(false);
   const [showEditLog, setShowEditLog] = createSignal(false);
   const [showViewLog, setShowViewLog] = createSignal(false);
 
-  const role = () => session()?.role || '';
+  const loadLog = async () => {
+    const phid = phaseId();
+    if (isNaN(phid) || phid <= 0) return;
+    setLogLoading(true);
+    try {
+      if (isClientMode()) {
+        const result = await tokenGetPhaseLog(tokenId(), phid);
+        setInitialLogContent(result);
+        return;
+      }
+      const res = await getPhaseLog(phid);
+      setInitialLogContent('error' in res ? { phaseId: phid, content: '' } : res);
+    } catch {
+      setInitialLogContent({ phaseId: phid, content: '' });
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  const role = createMemo(() => {
+    if (isClientMode()) return '';
+    try { return session()?.role || ''; } catch { return ''; }
+  });
   const isSupervisor = () => role() === 'Supervisor';
   const canEditLog = () => isSupervisor() && !isClientMode();
 
@@ -142,16 +196,36 @@ export default function PhaseView() {
   };
 
   // --- Phase Feedbacks ---
-  const fetchFeedbacksFn = async (pid: number) => {
+  const [feedbacks, setFeedbacks] = createSignal<PhaseFeedback[] | undefined>(undefined);
+  const [feedbacksLoading, setFeedbacksLoading] = createSignal(true);
+  const refetchFeedbacks = () => loadFeedbacks();
+
+  const loadFeedbacks = async () => {
+    const phid = phaseId();
+    if (isNaN(phid) || phid <= 0) return;
+    setFeedbacksLoading(true);
     try {
-      if (isClientMode()) return await tokenGetFeedbacksByPhase(tokenId(), pid);
-      return await getPhaseFeedbacks(pid);
+      const result = isClientMode()
+        ? await tokenGetFeedbacksByPhase(tokenId(), phid)
+        : await getPhaseFeedbacks(phid);
+      setFeedbacks(result);
     } catch {
-      return [];
+      // silent
+    } finally {
+      setFeedbacksLoading(false);
     }
   };
 
-  const [feedbacks, { refetch: refetchFeedbacks }] = createResource(phaseId, (pid) => fetchFeedbacksFn(pid));
+  // Trigger all data loading reactively when route params resolve
+  createEffect(() => {
+    const phid = phaseId();
+    if (!isNaN(phid) && phid > 0) {
+      loadPhaseData();
+      loadLog();
+      loadFeedbacks();
+    }
+  });
+
   const [newFeedback, setNewFeedback] = createSignal('');
   const [feedbackLoading, setFeedbackLoading] = createSignal(false);
 
@@ -175,73 +249,203 @@ export default function PhaseView() {
     }
   };
 
+  const backUrl = () => {
+    if (isClientMode()) return `/client/${tokenId()}/project/${dashboardProjectId()}`;
+    return `/insider/project/${dashboardProjectId()}`;
+  };
+
   return (
-    <div class="max-w-5xl mx-auto">
-      <Show when={error()}><div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{error()}<button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button></div></Show>
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h2 class="text-xl font-semibold text-white mb-1">Phase Dashboard</h2>
-          <p class="text-sm text-zinc-500">Phase activity log and feedback.</p>
-        </div>
-      </div>
+    <div class="min-h-screen bg-[#0B0B0C] flex items-start justify-center pt-16 pb-16 px-4">
+      <div class="w-full max-w-2xl">
+        {/* Back link */}
+        <A
+          href={backUrl()}
+          class="inline-flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[12px] mb-4 no-underline transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Back to project
+        </A>
 
-      {/* Phase Log Viewer */}
-      <Show when={logContent()}>
-        <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-8 relative">
-          <div class="flex items-center justify-between p-4 border-b border-[#1F1F23]">
-            <h3 class="text-sm font-semibold uppercase text-zinc-400 tracking-wider">Phase Log</h3>
-            <div class="flex gap-2">
-              <button onClick={() => setShowViewLog(true)} class="bg-[#27272A] border border-[#3F3F46] hover:bg-[#3F3F46] text-zinc-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors">View Log</button>
-              <Show when={canEditLog()}>
-                <button onClick={() => setShowEditLog(true)} class="bg-white text-black font-semibold text-xs px-3 py-1.5 rounded cursor-pointer hover:bg-zinc-200 transition-colors">Edit Log</button>
-              </Show>
-            </div>
+        <Show when={error()}>
+          <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">
+            {error()}
+            <button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button>
           </div>
-          <div class="relative max-h-[250px] overflow-y-hidden p-6 pt-4">
-            <div class="prose prose-invert prose-sm max-w-none text-zinc-300 [&_img]:rounded-lg [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={initialLogContent()?.content || ''} />
-            <div class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[#121214] to-transparent pointer-events-none" />
-          </div>
-        </div>
-      </Show>
+        </Show>
 
-      {/* Phase Feedback Section */}
-      <h3 class="text-sm font-semibold uppercase text-zinc-400 tracking-wider mb-4">Feedback</h3>
-      <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-8">
-        <div class="p-4">
-          <Show when={feedbacks.loading}><p class="text-zinc-500 text-sm">Loading feedback...</p></Show>
-          <Show when={!feedbacks.loading && (feedbacks() || []).length === 0}>
-            <p class="text-zinc-500 text-sm">No feedback yet.</p>
-          </Show>
-          <div class="flex flex-col gap-3">
-            <For each={feedbacks()}>{(fb) => (
-              <div class="bg-[#0B0B0C] p-3 rounded border border-[#1F1F23]">
-                <p class="text-sm text-zinc-300">{fb.content}</p>
-                <div class="flex items-center gap-2 mt-2">
-                  <span class="text-[10px] text-zinc-600">{fb.authorName ? fb.authorName : fb.userId ? `User #${fb.userId}` : 'Anonymous'}</span>
-                  <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
+        <Show when={phaseDataLoading()}>
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-sm p-8 text-center">
+            <p class="text-zinc-500 text-sm">Loading phase...</p>
+          </div>
+        </Show>
+
+        <Show when={!phaseDataLoading() && !phase()}>
+          <div class="bg-[#121214] border border-[#1F1F23] rounded-sm p-8 text-center">
+            <p class="text-zinc-500 text-sm">Phase not found.</p>
+          </div>
+        </Show>
+
+        <Show when={phase()}>
+          {(p) => (
+            <div class="flex gap-4">
+              {/* LEFT: Main content card */}
+              <div class="flex-1 bg-[#121214] border border-[#1F1F23] rounded-sm p-5 min-w-0">
+                {/* Status chip */}
+                <div class="flex items-center gap-2 mb-3">
+                  <span class={`status-chip ${p().state === 'Complete' ? 'status-chip-green' : 'status-chip-orange'}`}>
+                    {p().state}
+                  </span>
+                  <h2 class="text-lg font-semibold text-white leading-tight">{p().name}</h2>
+                </div>
+
+                {/* Detailed task progress bar */}
+                {(() => {
+                  const tasks = phaseTasks();
+                  const total = tasks.length || 1;
+                  const qa = tasks.filter((t: Task) => t.state === 'QA approved').length;
+                  const review = tasks.filter((t: Task) => t.state === 'to review').length;
+                  const inProg = tasks.filter((t: Task) => t.state === 'in-progress').length;
+                  const backlog = tasks.filter((t: Task) => t.state === 'backlog').length;
+                  const qaPct = Math.round((qa / total) * 100);
+                  const rvPct = Math.round((review / total) * 100);
+                  const ipPct = Math.round((inProg / total) * 100);
+                  const blPct = Math.round((backlog / total) * 100);
+                  return (
+                    <div class="mb-5 bg-[#121214] border-2 border-[#1F1F23] rounded-sm p-4">
+                      <div class="flex items-center justify-between mb-2">
+                        <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Progress</p>
+                        <p class="text-[10px] text-zinc-600">{total} task{total !== 1 ? 's' : ''} total</p>
+                      </div>
+                      {/* Segmented progress bar */}
+                      <div class="h-3 w-full rounded-full bg-[#27272A] flex overflow-hidden mb-3">
+                        {qa > 0 && <div class="h-full bg-emerald-500 transition-all" style={{ width: `${qaPct}%` }} title={`QA Approved: ${qa} tasks (${qaPct}%)`} />}
+                        {review > 0 && <div class="h-full bg-orange-500 transition-all" style={{ width: `${rvPct}%` }} title={`To Review: ${review} tasks (${rvPct}%)`} />}
+                        {inProg > 0 && <div class="h-full bg-blue-500 transition-all" style={{ width: `${ipPct}%` }} title={`In Progress: ${inProg} tasks (${ipPct}%)`} />}
+                        {backlog > 0 && <div class="h-full bg-zinc-600 transition-all" style={{ width: `${blPct}%` }} title={`Backlog: ${backlog} tasks (${blPct}%)`} />}
+                      </div>
+                      {/* State breakdown with bold percentages */}
+                      <div class="grid grid-cols-4 gap-2">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          <span class="text-[10px] text-zinc-500">QA</span>
+                          <span class="text-[13px] font-bold text-emerald-400 ml-auto">{qaPct}%</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                          <span class="text-[10px] text-zinc-500">Review</span>
+                          <span class="text-[13px] font-bold text-orange-400 ml-auto">{rvPct}%</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                          <span class="text-[10px] text-zinc-500">In Prog</span>
+                          <span class="text-[13px] font-bold text-blue-400 ml-auto">{ipPct}%</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-zinc-500 shrink-0" />
+                          <span class="text-[10px] text-zinc-500">Backlog</span>
+                          <span class="text-[13px] font-bold text-zinc-400 ml-auto">{blPct}%</span>
+                        </div>
+                      </div>
+                      {tasks.length === 0 && (
+                        <p class="text-[11px] text-zinc-600 italic mt-2">No tasks in this phase yet.</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Phase Log */}
+                <Show when={logContent()}>
+                  <div class="border-t border-[#1F1F23] pt-4 mb-5">
+                    <div class="flex items-center justify-between mb-3">
+                      <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Phase Log</p>
+                      <div class="flex gap-1.5">
+                        <button onClick={() => setShowViewLog(true)} class="bg-[#1F1F23] hover:bg-[#27272A] text-zinc-400 hover:text-zinc-200 text-[10px] px-3 py-1.5 rounded-md cursor-pointer transition-colors border border-[#27272A]">View</button>
+                        <Show when={canEditLog()}>
+                          <button onClick={() => setShowEditLog(true)} class="bg-white text-black font-medium text-[10px] px-3 py-1.5 rounded-md cursor-pointer hover:bg-zinc-200 transition-colors">Edit</button>
+                        </Show>
+                      </div>
+                    </div>
+                    <div class="relative max-h-[200px] overflow-y-hidden">
+                      <div class="prose prose-invert prose-sm max-w-none text-zinc-300 text-[12px] leading-relaxed [&_img]:rounded-md [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={initialLogContent()?.content || '<p class="text-zinc-600 italic text-[11px]">No content yet.</p>'} />
+                      <div class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#121214] to-transparent pointer-events-none" />
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Feedback Section */}
+                <div class="border-t border-[#1F1F23] pt-4">
+                  <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Activity</p>
+                  <Show when={feedbacksLoading()}><p class="text-zinc-500 text-xs">Loading...</p></Show>
+                  <Show when={!feedbacksLoading() && (feedbacks() || []).length === 0}>
+                    <p class="text-zinc-600 text-[11px] mb-3">No activity yet.</p>
+                  </Show>
+                  <div class="flex flex-col gap-2 mb-3">
+                    <For each={feedbacks()}>{(fb) => (
+                      <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23]">
+                        <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                          <span class="text-[10px] text-zinc-500">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>
+                          <span class="text-[10px] text-zinc-700">·</span>
+                          <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )}</For>
+                  </div>
+                  <form onSubmit={handleSubmitFeedback} class="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add a comment..."
+                      value={newFeedback()}
+                      onInput={(e) => setNewFeedback(e.currentTarget.value)}
+                      class="flex-1 bg-[#0B0B0C] border border-[#27272A] text-white text-[12px] p-2 rounded-md focus:outline-none focus:border-[#3F3F46] placeholder-zinc-600"
+                    />
+                    <button
+                      type="submit"
+                      disabled={feedbackLoading() || !newFeedback().trim()}
+                      class="bg-white text-black font-medium text-[11px] px-3 py-2 rounded-md cursor-pointer hover:bg-zinc-200 disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      {feedbackLoading() ? '...' : 'Send'}
+                    </button>
+                  </form>
                 </div>
               </div>
-            )}</For>
-          </div>
-        </div>
 
-        {/* Feedback Form */}
-        <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] p-4 flex gap-3">
-            <input
-              type="text"
-              placeholder="Write a comment..."
-              value={newFeedback()}
-              onInput={(e) => setNewFeedback(e.currentTarget.value)}
-              class="flex-1 bg-[#0B0B0C] border border-[#3F3F46] text-white text-sm p-2.5 rounded focus:outline-none focus:border-zinc-500"
-            />
-            <button
-              type="submit"
-              disabled={feedbackLoading() || !newFeedback().trim()}
-              class="bg-white text-black font-semibold text-sm px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 disabled:opacity-50"
-            >
-              {feedbackLoading() ? 'Posting...' : 'Post'}
-            </button>
-        </form>
+              {/* RIGHT: Floating property cards */}
+              <div class="w-52 shrink-0 flex flex-col gap-3">
+                {/* State card */}
+                <div class="bg-[#121214] border border-[#1F1F23] rounded-sm p-4">
+                  <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">Status</p>
+                  <div class="flex items-center gap-2">
+                    <span class={`w-2.5 h-2.5 rounded-full ${p().state === 'Complete' ? 'bg-emerald-500' : 'bg-orange-500'}`} />
+                    <span class={`text-[13px] font-medium ${p().state === 'Complete' ? 'text-emerald-400' : 'text-orange-400'}`}>{p().state}</span>
+                  </div>
+                </div>
+
+                {/* Tasks card */}
+                <div class="bg-[#121214] border border-[#1F1F23] rounded-sm p-4">
+                  <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Tasks</p>
+                  <p class="text-[20px] font-bold text-white">{phaseTaskCount()}</p>
+                </div>
+
+                {/* Project card */}
+                <div class="bg-[#121214] border border-[#1F1F23] rounded-sm p-4">
+                  <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Project</p>
+                  <p class="text-[13px] text-zinc-300">#{dashboardProjectId()}</p>
+                </div>
+
+                {/* Toggle state (Supervisor only) */}
+                <Show when={isSupervisor() && !isClientMode()}>
+                  <button
+                    onClick={handleTogglePhase}
+                    class="bg-[#1F1F23] border border-[#27272A] hover:bg-[#27272A] text-zinc-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-sm cursor-pointer transition-colors w-full text-center"
+                  >
+                    Toggle to {p().state === 'UAT' ? 'Complete' : 'UAT'}
+                  </button>
+                </Show>
+              </div>
+            </div>
+          )}
+        </Show>
       </div>
 
       {/* EDIT LOG MODAL */}

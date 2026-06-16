@@ -1,11 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'prosemirror-view/style/prosemirror.css';
 
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-surface: #0B0B0C;
+  --color-surface-elevated: #121214;
+  --color-surface-hover: #1A1A1E;
+  --color-surface-raised: #1C1C1F;
+  --color-border: #1F1F23;
+  --color-border-light: #27272A;
+  --color-border-medium: #3F3F46;
+  --color-accent-teal: #14b8a6;
+  --color-accent-orange: #f97316;
+  --color-accent-purple: #a855f7;
+  --color-accent-green: #22c55e;
+  --color-accent-blue: #3b82f6;
+}
+
 @layer base {
   html, body {
-    background-color: #0B0B0C;
+    background-color: var(--color-surface);
     color: #D4D4D8;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+  /* Compact scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3F3F46; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #52525B; }
 }
 
 /* Native form elements in dark mode */
@@ -21,6 +46,56 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
 }
+
+/* --- Jira-like component utilities --- */
+
+/* Status chip — pill-shaped */
+.status-chip {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium leading-tight;
+}
+.status-chip-teal  { @apply bg-teal-500/15 text-teal-400; }
+.status-chip-orange { @apply bg-orange-500/15 text-orange-400; }
+.status-chip-purple { @apply bg-purple-500/15 text-purple-400; }
+.status-chip-green  { @apply bg-emerald-500/15 text-emerald-400; }
+.status-chip-zinc   { @apply bg-zinc-500/15 text-zinc-400; }
+.status-chip-blue   { @apply bg-blue-500/15 text-blue-400; }
+
+/* Dot indicator */
+.dot-teal   { @apply w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0; }
+.dot-orange { @apply w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0; }
+.dot-purple { @apply w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0; }
+.dot-green  { @apply w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0; }
+.dot-blue   { @apply w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0; }
+.dot-zinc   { @apply w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0; }
+
+/* Progress bar — slim */
+.progress-bar {
+  @apply h-1 rounded-full bg-[#27272A] overflow-hidden;
+}
+.progress-bar-fill {
+  @apply h-full rounded-full transition-all duration-300;
+}
+
+/* Avatar — compact circle */
+.avatar-xs {
+  @apply w-5 h-5 rounded-full bg-zinc-700 text-[10px] font-semibold text-zinc-300 flex items-center justify-center shrink-0 uppercase;
+}
+
+/* Table row hover */
+.table-row {
+  @apply hover:bg-[#1A1A1E] transition-colors cursor-pointer;
+}
+
+/* Multi-phase progress bar segments */
+.phase-segment {
+  @apply h-full inline-block shrink-0 transition-all duration-200;
+}
+.phase-segment-green  { @apply bg-emerald-600; }
+.phase-segment-orange { @apply bg-orange-600; }
+.phase-segment-blue   { @apply bg-blue-600; }
+.phase-segment-zinc   { @apply bg-zinc-600; }
+.phase-segment-purple { @apply bg-purple-600; }
+.phase-segment-empty   { @apply bg-[#27272A]; }
 
 /* Tiptap Editor Styles */
 .ProseMirror {

@@ -1,34 +1,14 @@
 {
-  "name": "backend-inscribing-ceremony",
+  "name": "server-database architecture template",
   "version": "1.0.0",
-  "description": "a collection of services for the backend of inscribing-ceremony",
+  "description": "a template I just use on the go",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start:backend": "cd backend-server && npm run start",
-    "start:database": "cd database-server && docker compose up",
-    "setup:backend": "cd backend-server && npm install && npm run db:generate && npm run db:migrate && echo '\nsetup for backend done.\nFine to close the process now. '",
-
-    "seed:backend" : "sleep 1 && cd backend-server && npm run seed",
-    "clear:backend" : "sleep 1 && cd backend-server && npm run clear",
-
-    "clear": "concurrently --no-kill \"npm run start:database\" \"npm run clear:backend\"",
-    "setup": "concurrently --no-kill \"npm run start:database\" \"npm run setup:backend\"",
-    "seed": "concurrently --no-kill \"npm run start:database\" \"npm run seed:backend\"",
-    "start": "concurrently --no-kill \"npm run start:backend\" \"npm run start:database\"",
-    "super-start": "npm run setup && npm run seed && npm run start"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Suikyoo/backend-inscribing-ceremony.git"
+    "super-start": "cd database-server && docker compose up -d && cd .. && cd backend-server && npm install && npm run db:generate && npm run db:push &&  npm run seed && npm run start"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/Suikyoo/backend-inscribing-ceremony/issues"
-  },
-  "homepage": "https://github.com/Suikyoo/backend-inscribing-ceremony#readme",
   "devDependencies": {
     "concurrently": "^9.2.1"
   },

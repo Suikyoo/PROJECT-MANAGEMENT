@@ -55,13 +55,12 @@ export async function isValidToken(id: string): Promise<boolean> {
 
 // Validate client token from req.body.token
 export const validate: RequestHandler = async (req, res, next) => {
-  const tokenId = req.body?.token || null;
+  const tokenId = req.params.token_id as string;
   if (!tokenId) {
     return res.status(400).json({ error: "token required" });
   }
   const valid = await isValidToken(tokenId);
   if (!valid) {
-    console.log("token expired or invalid:", tokenId);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
   res.locals.tokenId = tokenId;

@@ -87,9 +87,9 @@ const BASE = '/api';
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
+    ...options,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -249,21 +249,20 @@ export const setPhaseLog = (phaseId: number, content: string) =>
 const TOKEN_BASE = '/api/token';
 
 async function tokenApi<T>(url: string, tokenId: string, options?: RequestInit): Promise<T> {
-  const body = { token: tokenId };
-  const mergedOptions = options?.body ? {
+  const fullUrl = `${TOKEN_BASE}/${tokenId}${url}`;
+  console.log("[tokenApi] fetching:", fullUrl);
+  // Spread options FIRST so explicit defaults always win — prevents
+  // options.headers from clobbering Content-Type and ensures credentials
+  // stays 'include' even if a caller accidentally passes credentials.
+  const res = await fetch(fullUrl, {
     ...options,
-    body: JSON.stringify({ ...body, ...JSON.parse(options.body as string) }),
-  } : { ...options, body: JSON.stringify(body) };
-  const res = await fetch(`${TOKEN_BASE}${url}`, {
     credentials: 'include',
-    method: "POST",
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...mergedOptions,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    console.log(`failed: ${TOKEN_BASE}${url}`)
-    throw new Error(err.error || `HTTP ${res.status}`);
+    console.error(`[tokenApi] FAILED ${res.status} req=${fullUrl} resUrl=${res.url}`, err);
+    throw new Error(`${err.error || `HTTP ${res.status}`} [url: ${fullUrl}, final: ${res.url}]`);
   }
   return res.json();
 }
@@ -294,6 +293,7 @@ export const tokenGetFeedbacksByPhase = (tokenId: string, phaseId: number) =>
 
 export const tokenCreatePhaseFeedback = (tokenId: string, phaseId: number, content: string) =>
   tokenApi<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', tokenId, {
+    method: "POST",
     body: JSON.stringify({ content }),
   });
 
@@ -302,6 +302,7 @@ export const tokenGetFeedbacksByProject = (tokenId: string, projectId: number) =
 
 export const tokenCreateProjectFeedback = (tokenId: string, projectId: number, content: string) =>
   tokenApi<ProjectFeedback>('/projects/' + projectId + '/feedbacks', tokenId, {
+    method: "POST",
     body: JSON.stringify({ content }),
   });
 

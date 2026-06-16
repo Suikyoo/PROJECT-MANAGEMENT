@@ -130,7 +130,7 @@ export function configRoutes(app: Express) {
   // Check current session
   app.get("/auth/me", authorize, async (_req, res) => {
     const users = await getUserById(res.locals.userId);
-    if (!users.length) return res.status(404).json({ error: "User not found" });
+    if (!users.length) return res.status(404).json({ error: "Meh not found" });
     const u = users[0];
     return res.json({ userId: u.id, username: u.username, name: u.name, role: u.role });
   });
@@ -383,12 +383,12 @@ export function configRoutes(app: Express) {
   // ---- Client token routes (prefix /token/) ----
   //most of these have post on them but they're actually inquirer functions
   // Projects
-  app.post("/token/projects", validate, async (_, res) => {
+  app.get("/token/:token_id/projects", validate, async (_, res) => {
     const tokenId = res.locals.tokenId!;
     return res.json(await getAllowedProjectsByTokenId(tokenId));
   });
 
-  app.post("/token/projects/:id", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -398,7 +398,7 @@ export function configRoutes(app: Express) {
     return res.json(allowed.filter(p => p.id === projectId));
   });
 
-  app.post("/token/projects/:id/phases", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id/phases", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -408,7 +408,21 @@ export function configRoutes(app: Express) {
     return res.json(await getPhasesByProjectId(projectId));
   });
 
-  app.post("/token/phases/:id", validate, async (req, res) => {
+  app.get("/token/:token_id/phases/:id", validate, async (req, res) => {
+    const phaseId = Number(req.params.id);
+    const tokenId = res.locals.tokenId!;
+    const phases = await getPhasesById(phaseId);
+    if (!phases.length) return res.status(404).json({ error: "Phase not found" });
+    const allowed = await getAllowedProjectsByTokenId(tokenId);
+    console.log("allowedProjects: ", allowed);
+    console.log("phase: ", phases);
+    if (!allowed.find(p => p.id === phases[0].projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    return res.json(phases);
+  });
+
+  app.get("/token/:token_id/phases/:id/feedbacks", validate, async (req, res) => {
     const phaseId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const phases = await getPhasesById(phaseId);
@@ -417,10 +431,22 @@ export function configRoutes(app: Express) {
     if (!allowed.find(p => p.id === phases[0].projectId)) {
       return res.status(403).json({ error: "Unauthorized" });
     }
-    return res.json(phases);
-  });
+    return res.json(await getPhaseFeedbacksByPhaseId(phaseId));
+  })
 
-  app.post("/token/phases/:id/feedbacks", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id/feedbacks", validate, async (req, res) => {
+    const projectId = Number(req.params.id);
+    const tokenId = res.locals.tokenId!;
+    const allowed = await getAllowedProjectsByTokenId(tokenId);
+    if (!allowed.find(p => p.id === projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    return res.json(await getProjectFeedbacksByProjectId(projectId));
+
+  })
+
+  app.post("/token/:token_id/phases/:id/feedbacks", validate, async (req, res) => {
     const phaseId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const phases = await getPhasesById(phaseId);
@@ -436,7 +462,7 @@ export function configRoutes(app: Express) {
     return res.json(feedback);
   });
 
-  app.post("/token/projects/:id/feedbacks", validate, async (req, res) => {
+  app.post("/token/:token_id/projects/:id/feedbacks", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -450,7 +476,7 @@ export function configRoutes(app: Express) {
     return res.json(feedback);
   });
 
-  app.post("/token/projects/:id/log", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id/log", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -461,7 +487,7 @@ export function configRoutes(app: Express) {
     return res.json(log || { projectId, content: "" });
   });
 
-  app.post("/token/phases/:id/log", validate, async (req, res) => {
+  app.get("/token/:token_id/phases/:id/log", validate, async (req, res) => {
     const phaseId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const phases = await getPhasesById(phaseId);
@@ -474,7 +500,7 @@ export function configRoutes(app: Express) {
     return res.json(log || { phaseId, content: "" });
   });
 
-  app.post("/token/projects/:id/tasks", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id/tasks", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -484,7 +510,7 @@ export function configRoutes(app: Express) {
     return res.json(await getTasksByProjectId(projectId));
   });
 
-  app.post("/token/phases/:id/tasks", validate, async (req, res) => {
+  app.get("/token/:token_id/phases/:id/tasks", validate, async (req, res) => {
     const phaseId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const phases = await getPhasesById(phaseId);
@@ -496,7 +522,7 @@ export function configRoutes(app: Express) {
     return res.json(await getTaskByPhaseId(phaseId));
   });
 
-  app.post("/token/projects/:id/tags", validate, async (req, res) => {
+  app.get("/token/:token_id/projects/:id/tags", validate, async (req, res) => {
     const projectId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const allowed = await getAllowedProjectsByTokenId(tokenId);
@@ -506,7 +532,7 @@ export function configRoutes(app: Express) {
     return res.json(await getTagsByProjectId(projectId));
   });
 
-  app.post("/token/tasks/:id/tags", validate, async (req, res) => {
+  app.get("/token/:token_id/tasks/:id/tags", validate, async (req, res) => {
     const taskId = Number(req.params.id);
     const tokenId = res.locals.tokenId!;
     const tasks = await getTaskById(taskId);
