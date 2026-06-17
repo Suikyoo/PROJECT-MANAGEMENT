@@ -46,7 +46,7 @@ export interface Project {
   description: string;
 }
 
-export interface ProjectFeedback {
+export interface ProjectComment {
   id: number;
   projectId: number;
   userId: number | null;
@@ -55,13 +55,58 @@ export interface ProjectFeedback {
   createdAt: string;
 }
 
-export interface PhaseFeedback {
+export interface PhaseComment {
   id: number;
   phaseId: number;
   userId: number | null;
   authorName: string | null;
   content: string;
   createdAt: string;
+}
+
+export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface Issue {
+  id: number;
+  projectId: number;
+  userId: number | null;
+  authorName: string | null;
+  title: string;
+  description: string;
+  proof: string;
+  priority: IssuePriority;
+  resolutionId: number | null;
+  createdAt: string;
+}
+
+export interface IssueComment {
+  id: number;
+  issueId: number;
+  userId: number | null;
+  authorName: string | null;
+  content: string;
+  createdAt: string;
+}
+
+export interface IssueTag {
+  id: number;
+  issueId: number;
+  name: string;
+  tagTypeId: number;
+}
+
+export interface TagType {
+  id: number;
+  name: string;
+}
+
+export interface Resolution {
+  id: number;
+  issueId: number;
+  userId: number;
+  title: string;
+  description: string;
+  proof: string;
 }
 
 export interface ProjectLog {
@@ -81,6 +126,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: string;
+  roles: string[];
 }
 
 const BASE = '/api';
@@ -100,7 +146,7 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Auth
 export const login = (email: string, password: string) =>
-  api<{ ok: boolean; role: string; userId: number; name: string; otpRequired?: boolean }>('/auth/login', {
+  api<{ ok: boolean; role: string; roles: string[]; userId: number; name: string; otpRequired?: boolean }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -204,25 +250,109 @@ export const createTag = (taskId: number, name: string) =>
 export const deleteTag = (tagId: number) =>
   api<void>('/tags/' + tagId, { method: 'DELETE' });
 
-// Feedbacks (Project)
-export const getProjectFeedbacks = (projectId: number) =>
-  api<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks');
+// Comments (Project) — insider only
+export const getProjectComments = (projectId: number) =>
+  api<ProjectComment[]>('/projects/' + projectId + '/comments');
 
-export const createProjectFeedback = (projectId: number, content: string, authorName?: string) =>
-  api<ProjectFeedback>('/projects/' + projectId + '/feedbacks', {
+export const createProjectComment = (projectId: number, content: string, authorName?: string) =>
+  api<ProjectComment>('/projects/' + projectId + '/comments', {
     method: 'POST',
     body: JSON.stringify({ content, authorName }),
   });
 
-// Feedbacks (Phase)
-export const getPhaseFeedbacks = (phaseId: number) =>
-  api<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks');
+// Comments (Phase) — insider only
+export const getPhaseComments = (phaseId: number) =>
+  api<PhaseComment[]>('/phases/' + phaseId + '/comments');
 
-export const createPhaseFeedback = (phaseId: number, content: string, authorName?: string) =>
-  api<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', {
+export const createPhaseComment = (phaseId: number, content: string, authorName?: string) =>
+  api<PhaseComment>('/phases/' + phaseId + '/comments', {
     method: 'POST',
     body: JSON.stringify({ content, authorName }),
   });
+
+// Issues (insider)
+export const getIssuesByProject = (projectId: number) =>
+  api<Issue[]>('/projects/' + projectId + '/issues');
+
+export const createIssue = (projectId: number, title: string, description?: string, proof?: string, priority?: IssuePriority) =>
+  api<Issue>('/projects/' + projectId + '/issues', {
+    method: 'POST',
+    body: JSON.stringify({ title, description, proof, priority }),
+  });
+
+export const getIssueById = (issueId: number) =>
+  api<Issue>('/issues/' + issueId);
+
+// Issue Comments
+export const getIssueComments = (issueId: number) =>
+  api<IssueComment[]>('/issues/' + issueId + '/comments');
+
+export const createIssueComment = (issueId: number, content: string) =>
+  api<IssueComment>('/issues/' + issueId + '/comments', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+// Issue Tags
+export const getIssueTags = (issueId: number) =>
+  api<IssueTag[]>('/issues/' + issueId + '/tags');
+
+export const createIssueTag = (issueId: number, name: string, tagTypeId: number) =>
+  api<IssueTag>('/issues/' + issueId + '/tags', {
+    method: 'POST',
+    body: JSON.stringify({ name, tagTypeId }),
+  });
+
+export const deleteIssueTag = (tagId: number) =>
+  api<void>('/issue-tags/' + tagId, { method: 'DELETE' });
+
+// Tag Types
+export const getTagTypes = () =>
+  api<TagType[]>('/tag-types');
+
+export const createTagType = (name: string) =>
+  api<TagType>('/tag-types', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+
+// Resolutions (Supervisor only)
+export const createResolution = (issueId: number, title: string, description?: string, proof?: string) =>
+  api<Resolution>('/issues/' + issueId + '/resolution', {
+    method: 'POST',
+    body: JSON.stringify({ title, description, proof }),
+  });
+
+export const getResolution = (issueId: number) =>
+  api<Resolution | null>('/issues/' + issueId + '/resolution');
+
+// Issue token routes (client)
+export const tokenGetIssuesByProject = (tokenId: string, projectId: number) =>
+  tokenApi<Issue[]>('/projects/' + projectId + '/issues', tokenId);
+
+export const tokenGetIssueById = (tokenId: string, issueId: number) =>
+  tokenApi<Issue>('/issues/' + issueId, tokenId);
+
+export const tokenCreateIssue = (tokenId: string, projectId: number, title: string, description?: string, proof?: string, priority?: IssuePriority) =>
+  tokenApi<Issue>('/projects/' + projectId + '/issues', tokenId, {
+    method: 'POST',
+    body: JSON.stringify({ title, description, proof, priority }),
+  });
+
+export const tokenGetIssueComments = (tokenId: string, issueId: number) =>
+  tokenApi<IssueComment[]>('/issues/' + issueId + '/comments', tokenId);
+
+export const tokenCreateIssueComment = (tokenId: string, issueId: number, content: string) =>
+  tokenApi<IssueComment>('/issues/' + issueId + '/comments', tokenId, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+export const tokenGetIssueTags = (tokenId: string, issueId: number) =>
+  tokenApi<IssueTag[]>('/issues/' + issueId + '/tags', tokenId);
+
+export const tokenGetResolution = (tokenId: string, issueId: number) =>
+  tokenApi<Resolution | null>('/issues/' + issueId + '/resolution', tokenId);
 
 export const uploadImage = async (file: File): Promise<{ url: string }> => {
   const formData = new FormData();
@@ -305,24 +435,6 @@ export const tokenGetTagsByProject = (tokenId: string, projectId: number) =>
 export const tokenGetTagsByTask = (tokenId: string, taskId: number) =>
   tokenApi<Tag[]>('/tasks/' + taskId + '/tags', tokenId);
 
-export const tokenGetFeedbacksByPhase = (tokenId: string, phaseId: number) =>
-  tokenApi<PhaseFeedback[]>('/phases/' + phaseId + '/feedbacks', tokenId);
-
-export const tokenCreatePhaseFeedback = (tokenId: string, phaseId: number, content: string) =>
-  tokenApi<PhaseFeedback>('/phases/' + phaseId + '/feedbacks', tokenId, {
-    method: "POST",
-    body: JSON.stringify({ content }),
-  });
-
-export const tokenGetFeedbacksByProject = (tokenId: string, projectId: number) =>
-  tokenApi<ProjectFeedback[]>('/projects/' + projectId + '/feedbacks', tokenId);
-
-export const tokenCreateProjectFeedback = (tokenId: string, projectId: number, content: string) =>
-  tokenApi<ProjectFeedback>('/projects/' + projectId + '/feedbacks', tokenId, {
-    method: "POST",
-    body: JSON.stringify({ content }),
-  });
-
 export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
   tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);
 
@@ -359,7 +471,7 @@ export const deleteUser = (userId: number) =>
 
 // OTP
 export const verifyOTP = (email: string, otp: string) =>
-  api<{ ok: boolean; role: string; userId: number; name: string }>('/auth/verify-otp', {
+  api<{ ok: boolean; role: string; roles: string[]; userId: number; name: string }>('/auth/verify-otp', {
     method: 'POST',
     body: JSON.stringify({ email, otp }),
   });

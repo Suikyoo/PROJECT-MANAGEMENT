@@ -3,17 +3,19 @@ import { For, Show, createSignal, createEffect, createMemo, untrack } from 'soli
 import { useParams, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByProject, togglePhaseState,
-  getProjectLog, setProjectLog, getProjectFeedbacks, createProjectFeedback, uploadImage,
+  getProjectLog, setProjectLog, getProjectComments, createProjectComment, uploadImage,
   getProjectUsers,
-  tokenGetPhasesByProject, tokenGetTasksByProject, tokenGetProjectLog, tokenGetFeedbacksByProject,
-  tokenCreateProjectFeedback, tokenGetProjectUsers,
+  tokenGetPhasesByProject, tokenGetTasksByProject, tokenGetProjectLog, tokenGetProjectUsers,
   acceptTask, submitTask, approveTask,
   getTagsByTask, createTag, deleteTag,
   tokenGetTagsByTask,
+  getIssuesByProject,
+  tokenGetIssuesByProject,
   type Phase, type Task, type Tag, type User,
-  ProjectLog, ProjectFeedback
+  type Issue,
+  ProjectLog, ProjectComment
 } from '../lib/fetch';
-import { session, getProjectById } from '../lib/store';
+import { session, getProjectById, currentUser } from '../lib/store';
 import { nameToColor } from '../lib/misc';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import { Editor } from '@tiptap/core';
@@ -135,7 +137,7 @@ export default function DashBoardView() {
       loadPhases();
       loadTasks();
       loadLog();
-      loadFeedbacks();
+      loadComments();
       loadProjectUsers();
     } else {
       console.log("[DashBoard] createEffect — skipping (invalid projectId)");
@@ -164,11 +166,11 @@ export default function DashBoardView() {
   // Session is only relevant in insider mode; in client mode, skip session() entirely
   // to avoid getMe() errors (e.g. "Meh not found") contaminating other signal handlers.
   // We use untrack + try/catch so a failed session resource doesn't crash the component.
-  const role = createMemo(() => {
-    if (isClientMode()) return '';
-    try { return untrack(() => session())?.role || ''; } catch { return ''; }
+  const userRoles = createMemo(() => {
+    if (isClientMode()) return [] as string[];
+    try { return untrack(() => session())?.roles || []; } catch { return [] as string[]; }
   });
-  const isSupervisor = () => role() === 'Supervisor';
+  const isSupervisor = () => userRoles().includes('Supervisor');
 
   // --- Task detail panel state ---
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
@@ -351,29 +353,27 @@ export default function DashBoardView() {
     setShowEditLog(false);
   };
 
-  // --- Project Feedbacks ---
-  const [feedbacks, setFeedbacks] = createSignal<ProjectFeedback[] | undefined>(undefined);
-  const [feedbacksLoading, setFeedbacksLoading] = createSignal(true);
-  const [feedbacksError, setFeedbacksError] = createSignal<string | undefined>(undefined);
-  const refetchFeedbacks = () => loadFeedbacks();
+  // --- Project Comments ---
+  const [comments, setComments] = createSignal<ProjectComment[] | undefined>(undefined);
+  const [commentsLoading, setCommentsLoading] = createSignal(true);
+  const [commentsError, setCommentsError] = createSignal<string | undefined>(undefined);
+  const refetchComments = () => loadComments();
 
-  const loadFeedbacks = async () => {
+  const loadComments = async () => {
     const pid = projectId();
     if (isNaN(pid) || pid <= 0) return;
-    setFeedbacksLoading(true);
-    setFeedbacksError(undefined);
+    setCommentsLoading(true);
+    setCommentsError(undefined);
     try {
-      const result = isClientMode()
-        ? await tokenGetFeedbacksByProject(tokenId(), pid)
-        : await getProjectFeedbacks(pid);
-      setFeedbacks(result);
+      const result = await getProjectComments(pid);
+      setComments(result);
     } catch (e: any) {
       const msg = e?.message || String(e);
-      setFeedbacksError(msg.includes('Unauthorized') || msg.includes('401') || msg.includes('403')
-        ? `Access denied for activity feed (#${pid}).`
-        : `Activity failed to load: ${msg}`);
+      setCommentsError(msg.includes('Unauthorized') || msg.includes('401') || msg.includes('403')
+        ? `Access denied for comments (#${pid}).`
+        : `Comments failed to load: ${msg}`);
     } finally {
-      setFeedbacksLoading(false);
+      setCommentsLoading(false);
     }
   };
 
@@ -397,31 +397,49 @@ export default function DashBoardView() {
     }
   };
 
-  const [newFeedback, setNewFeedback] = createSignal('');
-  const [feedbackAuthorName, setFeedbackAuthorName] = createSignal('');
-  const [feedbackLoading, setFeedbackLoading] = createSignal(false);
+  const [newComment, setNewComment] = createSignal('');
+  const [commentAuthorName, setCommentAuthorName] = createSignal('');
+  const [commentLoading, setCommentLoading] = createSignal(false);
 
-  const handleSubmitFeedback = async (e: Event) => {
+  const handleSubmitComment = async (e: Event) => {
     e.preventDefault();
-    const content = newFeedback().trim();
+    const content = newComment().trim();
     if (!content) return;
     const pid = projectId();
     if (pid <= 0) return;
-    setFeedbackLoading(true);
+    setCommentLoading(true);
     try {
-      if (isClientMode()) {
-        await tokenCreateProjectFeedback(tokenId(), pid, content);
-      } else {
-        await createProjectFeedback(pid, content);
-      }
-      setNewFeedback('');
-      refetchFeedbacks();
+      await createProjectComment(pid, content);
+      setNewComment('');
+      refetchComments();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to post feedback');
+      setError(err instanceof Error ? err.message : 'Failed to post comment');
     } finally {
-      setFeedbackLoading(false);
+      setCommentLoading(false);
     }
   };
+
+  // --- Issues snippet ---
+  const [issueCount, setIssueCount] = createSignal(0);
+
+  const loadIssueCount = async () => {
+    try {
+      const pid = projectId();
+      const result = isClientMode()
+        ? await tokenGetIssuesByProject(tokenId(), pid)
+        : await getIssuesByProject(pid);
+      setIssueCount(result.length);
+    } catch (e) { /* ignore */ }
+  };
+
+  createEffect(() => {
+    const pid = projectId();
+    if (pid) loadIssueCount();
+  });
+
+  const issuesUrl = () => isClientMode()
+    ? `/client/${tokenId()}/project/${projectId()}/issues`
+    : `/insider/project/${projectId()}/issues`;
 
   return (
     <div class="max-w-5xl">
@@ -533,6 +551,17 @@ project()!.state === 'completed' ? 'bg-blue-500/10 text-blue-400' :
           </div>
         </div>
       </Show>
+
+      {/* Issues Snippet */}
+      <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-5 px-3 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Issues</span>
+          <span class="text-[10px] text-zinc-600">{issueCount()} open</span>
+        </div>
+        <A href={issuesUrl()} class="bg-white text-black font-medium text-[10px] px-3 py-1.5 rounded-md cursor-pointer hover:bg-zinc-200 transition-colors no-underline">
+          View Issues
+        </A>
+      </div>
 
       {/* Phases — reference-style flat list */}
       <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Phases</h3>
@@ -660,50 +689,52 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
         </Show>
       </Show>
 
-      {/* Feedback Section — compact */}
-      <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Activity</h3>
+      {/* Comments Section — compact */}
+      <Show when={!isClientMode()}>
+      <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Comments</h3>
       <div class="bg-[#121214] border border-[#1F1F23] rounded-lg">
         <div class="p-3">
-          <Show when={feedbacksLoading()}><p class="text-zinc-500 text-xs">Loading...</p></Show>
-          <Show when={feedbacksError()}>
+          <Show when={commentsLoading()}><p class="text-zinc-500 text-xs">Loading...</p></Show>
+          <Show when={commentsError()}>
             <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-2">
-              Activity failed to load: {feedbacksError()}
+              Comments failed to load: {commentsError()}
             </div>
           </Show>
-          <Show when={!feedbacksLoading() && (feedbacks() || []).length === 0}>
-            <p class="text-zinc-600 text-[11px]">No activity yet.</p>
+          <Show when={!commentsLoading() && (comments() || []).length === 0}>
+            <p class="text-zinc-600 text-[11px]">No comments yet</p>
           </Show>
           <div class="flex flex-col gap-2">
-            <For each={feedbacks()}>{(fb) => (
+            <For each={comments()}>{(c) => (
               <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23]">
-                <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
+                <p class="text-[12px] text-zinc-300 leading-relaxed">{c.content}</p>
                 <div class="flex items-center gap-2 mt-1.5">
-                  <span class="avatar-xs">{fb.authorName ? fb.authorName.charAt(0) : '?'}</span>
-                  <span class="text-[10px] text-zinc-600">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>
+                  <span class="avatar-xs">{c.authorName ? c.authorName.charAt(0) : '?'}</span>
+                  <span class="text-[10px] text-zinc-600">{c.authorName || (c.userId ? `User #${c.userId}` : 'Anonymous')}</span>
                   <span class="text-[10px] text-zinc-700">·</span>
-                  <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
+                  <span class="text-[10px] text-zinc-600">{new Date(c.createdAt).toLocaleString()}</span>
                 </div>
               </div>
             )}</For>
           </div>
         </div>
-        <form onSubmit={handleSubmitFeedback} class="border-t border-[#1F1F23] px-3 py-2.5 flex gap-2">
+        <form onSubmit={handleSubmitComment} class="border-t border-[#1F1F23] px-3 py-2.5 flex gap-2">
           <input
             type="text"
             placeholder="Add a comment..."
-            value={newFeedback()}
-            onInput={(e) => setNewFeedback(e.currentTarget.value)}
+            value={newComment()}
+            onInput={(e) => setNewComment(e.currentTarget.value)}
             class="flex-1 bg-[#0B0B0C] border border-[#27272A] text-white text-[12px] p-2 rounded-md focus:outline-none focus:border-[#3F3F46] placeholder-zinc-600"
           />
           <button
             type="submit"
-            disabled={feedbackLoading() || !newFeedback().trim()}
+            disabled={commentLoading() || !newComment().trim()}
             class="bg-white text-black font-medium text-[11px] px-3 py-2 rounded-md cursor-pointer hover:bg-zinc-200 disabled:opacity-40 transition-colors shrink-0"
           >
-            {feedbackLoading() ? '...' : 'Send'}
+            {commentLoading() ? '...' : 'Send'}
           </button>
         </form>
       </div>
+      </Show>
 
       {/* EDIT LOG MODAL */}
       <Show when={showEditLog()}>
@@ -772,7 +803,7 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
           backUrl={isClientMode() ? `/client/${tokenId()}/project/${projectId()}` : `/insider/project/${projectId()}`}
           onClose={() => setSelectedTask(null)}
           onModified={refetchAllData}
-          role={role()}
+          roles={userRoles()}
           isClientMode={isClientMode()}
           isSupervisor={isSupervisor()}
           onAccept={async (id) => { await acceptTask(id); }}

@@ -85,6 +85,7 @@ export default function UserView() {
   const currentUser = () => session();
   const userName = () => currentUser()?.name ?? 'Guest';
   const userRole = () => (currentUser()?.role as AppRole) || 'Client';
+  const userRoles = () => currentUser()?.roles || [];
 
   const [form, setForm] = createSignal({
     name: userName(),
@@ -101,7 +102,7 @@ export default function UserView() {
     review: true,
     approved: true,
     blocked: true,
-    phaseReview: userRole() === 'Client' || userRole() === 'Supervisor',
+    phaseReview: userRoles().includes('Client') || userRoles().includes('Supervisor'),
     dueSoon: true,
   });
 

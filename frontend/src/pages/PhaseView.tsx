@@ -3,10 +3,10 @@ import { For, Show, createSignal, createEffect, createMemo, untrack } from 'soli
 import { useParams, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByPhase, togglePhaseState,
-  getPhaseLog, setPhaseLog, getPhaseFeedbacks, createPhaseFeedback, uploadImage,
+  getPhaseLog, setPhaseLog, getPhaseComments, createPhaseComment, uploadImage,
   tokenGetPhasesByProject, tokenGetTasksByPhase,
-  tokenGetPhaseLog, tokenGetFeedbacksByPhase, tokenCreatePhaseFeedback,
-  type Phase, type Task, type PhaseFeedback, PhaseLog
+  tokenGetPhaseLog,
+  type Phase, type Task, type PhaseComment, PhaseLog
 } from '../lib/fetch';
 import { session } from '../lib/store';
 import { Editor } from '@tiptap/core';
@@ -98,11 +98,11 @@ export default function PhaseView() {
     }
   };
 
-  const role = createMemo(() => {
-    if (isClientMode()) return '';
-    try { return session()?.role || ''; } catch { return ''; }
+  const userRoles = createMemo(() => {
+    if (isClientMode()) return [] as string[];
+    try { return session()?.roles || []; } catch { return [] as string[]; }
   });
-  const isSupervisor = () => role() === 'Supervisor';
+  const isSupervisor = () => userRoles().includes('Supervisor');
   const canEditLog = () => isSupervisor() && !isClientMode();
 
   // Create editor when element is available and edit modal is open
@@ -195,24 +195,22 @@ export default function PhaseView() {
     setShowEditLog(false);
   };
 
-  // --- Phase Feedbacks ---
-  const [feedbacks, setFeedbacks] = createSignal<PhaseFeedback[] | undefined>(undefined);
-  const [feedbacksLoading, setFeedbacksLoading] = createSignal(true);
-  const refetchFeedbacks = () => loadFeedbacks();
+  // --- Phase Comments ---
+  const [comments, setComments] = createSignal<PhaseComment[] | undefined>(undefined);
+  const [commentsLoading, setCommentsLoading] = createSignal(true);
+  const refetchComments = () => loadComments();
 
-  const loadFeedbacks = async () => {
+  const loadComments = async () => {
     const phid = phaseId();
     if (isNaN(phid) || phid <= 0) return;
-    setFeedbacksLoading(true);
+    setCommentsLoading(true);
     try {
-      const result = isClientMode()
-        ? await tokenGetFeedbacksByPhase(tokenId(), phid)
-        : await getPhaseFeedbacks(phid);
-      setFeedbacks(result);
+      const result = await getPhaseComments(phid);
+      setComments(result);
     } catch {
       // silent
     } finally {
-      setFeedbacksLoading(false);
+      setCommentsLoading(false);
     }
   };
 
@@ -222,30 +220,26 @@ export default function PhaseView() {
     if (!isNaN(phid) && phid > 0) {
       loadPhaseData();
       loadLog();
-      loadFeedbacks();
+      loadComments();
     }
   });
 
-  const [newFeedback, setNewFeedback] = createSignal('');
-  const [feedbackLoading, setFeedbackLoading] = createSignal(false);
+  const [newComment, setNewComment] = createSignal('');
+  const [commentLoading, setCommentLoading] = createSignal(false);
 
-  const handleSubmitFeedback = async (e: Event) => {
+  const handleSubmitComment = async (e: Event) => {
     e.preventDefault();
-    const content = newFeedback().trim();
+    const content = newComment().trim();
     if (!content) return;
-    setFeedbackLoading(true);
+    setCommentLoading(true);
     try {
-      if (isClientMode()) {
-        await tokenCreatePhaseFeedback(tokenId(), phaseId(), content);
-      } else {
-        await createPhaseFeedback(phaseId(), content);
-      }
-      setNewFeedback('');
-      refetchFeedbacks();
+      await createPhaseComment(phaseId(), content);
+      setNewComment('');
+      refetchComments();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to post feedback');
+      setError(err instanceof Error ? err.message : 'Failed to post comment');
     } finally {
-      setFeedbackLoading(false);
+      setCommentLoading(false);
     }
   };
 
@@ -372,42 +366,49 @@ export default function PhaseView() {
                   </div>
                 </Show>
 
-                {/* Feedback Section */}
-                <div class="border-t border-[#1F1F23] pt-4">
-                  <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Activity</p>
-                  <Show when={feedbacksLoading()}><p class="text-zinc-500 text-xs">Loading...</p></Show>
-                  <Show when={!feedbacksLoading() && (feedbacks() || []).length === 0}>
-                    <p class="text-zinc-600 text-[11px] mb-3">No activity yet.</p>
-                  </Show>
-                  <div class="flex flex-col gap-2 mb-3">
-                    <For each={feedbacks()}>{(fb) => (
-                      <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23] hover:bg-[#121214] transition-colors">
-                        <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
-                        <div class="flex items-center gap-2 mt-1.5">
-                          <span class="text-[10px] text-zinc-500">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>
-                          <span class="text-[10px] text-zinc-700">·</span>
-                          <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    )}</For>
+                {/* Comments Section */}
+                <Show when={!isClientMode()} fallback={
+                  <div class="border-t border-[#1F1F23] pt-4">
+                    <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Comments</p>
+                    <p class="text-zinc-600 text-[11px] mb-3">Comments are available to insiders.</p>
                   </div>
-                  <form onSubmit={handleSubmitFeedback} class="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add a comment..."
-                      value={newFeedback()}
-                      onInput={(e) => setNewFeedback(e.currentTarget.value)}
-                      class="flex-1 bg-[#0B0B0C] border border-[#27272A] text-white text-[12px] p-2 rounded-md focus:outline-none focus:border-[#3F3F46] placeholder-zinc-600"
-                    />
-                    <button
-                      type="submit"
-                      disabled={feedbackLoading() || !newFeedback().trim()}
-                      class="bg-white text-black font-medium text-[11px] px-3 py-2 rounded-md cursor-pointer hover:bg-zinc-200 disabled:opacity-40 transition-colors shrink-0"
-                    >
-                      {feedbackLoading() ? '...' : 'Send'}
-                    </button>
-                  </form>
-                </div>
+                }>
+                  <div class="border-t border-[#1F1F23] pt-4">
+                    <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Comments</p>
+                    <Show when={commentsLoading()}><p class="text-zinc-500 text-xs">Loading...</p></Show>
+                    <Show when={!commentsLoading() && (comments() || []).length === 0}>
+                      <p class="text-zinc-600 text-[11px] mb-3">No comments yet.</p>
+                    </Show>
+                    <div class="flex flex-col gap-2 mb-3">
+                      <For each={comments()}>{(fb) => (
+                        <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23] hover:bg-[#121214] transition-colors">
+                          <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
+                          <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-zinc-500">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>
+                            <span class="text-[10px] text-zinc-700">·</span>
+                            <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}</For>
+                    </div>
+                    <form onSubmit={handleSubmitComment} class="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add a comment..."
+                        value={newComment()}
+                        onInput={(e) => setNewComment(e.currentTarget.value)}
+                        class="flex-1 bg-[#0B0B0C] border border-[#27272A] text-white text-[12px] p-2 rounded-md focus:outline-none focus:border-[#3F3F46] placeholder-zinc-600"
+                      />
+                      <button
+                        type="submit"
+                        disabled={commentLoading() || !newComment().trim()}
+                        class="bg-white text-black font-medium text-[11px] px-3 py-2 rounded-md cursor-pointer hover:bg-zinc-200 disabled:opacity-40 transition-colors shrink-0"
+                      >
+                        {commentLoading() ? '...' : 'Send'}
+                      </button>
+                    </form>
+                  </div>
+                </Show>
               </div>
 
               {/* RIGHT: Floating property cards */}

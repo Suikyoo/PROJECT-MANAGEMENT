@@ -17,8 +17,8 @@ export interface TaskDetailPanelProps {
   onModified?: () => void;
   /** Called when panel is closed */
   onClose: () => void;
-  /** Current user role (empty string in client mode) */
-  role: string;
+  /** Current user roles (empty array in client mode) */
+  roles: string[];
   /** Whether in client/guest mode */
   isClientMode: boolean;
   /** Action handlers — wired by parent */
@@ -184,17 +184,17 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
               {/* Workflow actions */}
               <Show when={!props.isClientMode}>
                 <div class="border-t border-[#1F1F23] pt-4 flex gap-2">
-                  <Show when={props.role === 'Developer' && t().state === 'backlog'}>
+                  <Show when={props.roles.includes('Developer') && t().state === 'backlog'}>
                     <button onClick={handleAccept} class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-blue-500/30">
                       Accept task
                     </button>
                   </Show>
-                  <Show when={props.role === 'Developer' && t().state === 'in-progress'}>
+                  <Show when={props.roles.includes('Developer') && t().state === 'in-progress'}>
                     <button onClick={handleSubmit} class="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-orange-500/30">
                       Submit for review
                     </button>
                   </Show>
-                  <Show when={props.role === 'QA' && t().state === 'to review'}>
+                  <Show when={props.roles.includes('QA') && t().state === 'to review'}>
                     <button onClick={handleApprove} class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-emerald-500/30">
                       Approve
                     </button>

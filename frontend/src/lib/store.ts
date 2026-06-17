@@ -19,9 +19,59 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+// --- localStorage session persistence ---
+
+const SESSION_KEY = 'orbit_session';
+
+function loadCachedSession(): SessionUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionUser;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedSession(user: SessionUser) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } catch { /* quota exceeded – silently ignore */ }
+}
+
+function clearCachedSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch { /* ignore */ }
+}
+
 // --- Session state ---
 
-export const [session, { mutate: setSession, refetch: refetchSession }] = createResource<SessionUser | null>(getMe);
+const sessionFetcher = async (): Promise<SessionUser | null> => {
+  try {
+    const user = await getMe();
+    saveCachedSession(user);
+    return user;
+  } catch {
+    clearCachedSession();
+    return null;
+  }
+};
+
+export const [session, { mutate: _setSession, refetch: refetchSession }] = createResource<SessionUser | null>(
+  sessionFetcher,
+  { initialValue: loadCachedSession() }
+);
+
+/** Wraps the raw setSession to sync localStorage */
+export const setSession = (value: SessionUser | null) => {
+  if (value === null) {
+    clearCachedSession();
+  } else {
+    saveCachedSession(value);
+  }
+  _setSession(value);
+};
 
 export const sessionLoading = () => session.loading;
 

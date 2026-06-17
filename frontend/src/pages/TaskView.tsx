@@ -70,9 +70,9 @@ export default function TaskView() {
     }
   });
 
-  const role = createMemo(() => {
-    if (isClientMode()) return '';
-    try { return session()?.role || ''; } catch { return ''; }
+  const userRoles = createMemo(() => {
+    if (isClientMode()) return [] as string[];
+    try { return session()?.roles || []; } catch { return [] as string[]; }
   });
 
   const backUrl = () => {
@@ -122,9 +122,9 @@ export default function TaskView() {
           backUrl={backUrl()}
           onClose={handleClose}
           onModified={handleModified}
-          role={role()}
+          roles={userRoles()}
           isClientMode={isClientMode()}
-          isSupervisor={role() === 'Supervisor'}
+          isSupervisor={userRoles().includes('Supervisor')}
           onAccept={async (id) => { await acceptTask(id); }}
           onSubmit={async (id) => { await submitTask(id); }}
           onApprove={async (id) => { await approveTask(id); }}

@@ -1,5 +1,5 @@
 // ~/src/pages/Layout.tsx
-import { JSX, Show, For, createSignal, createMemo } from 'solid-js';
+import { JSX, Show, For, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import { getProjects, logout, tokenGetProjects, type Project } from '../lib/fetch';
@@ -48,6 +48,18 @@ export default function Layout(props: { children?: JSX.Element }) {
   }
 
   const basePath = () => isClientMode() ? `/client/${tokenId()}` : '/insider';
+
+  // Page transition animation — re-triggers on route change
+  let contentRef!: HTMLDivElement;
+  createEffect(() => {
+    // Track pathname changes
+    const _ = location.pathname + location.search;
+    if (contentRef) {
+      contentRef.style.animation = 'none';
+      void contentRef.offsetHeight; // force reflow
+      contentRef.style.animation = '';
+    }
+  });
 
   // Status dot color mapping
   const statusDotColor = (state: string) => {
@@ -290,7 +302,7 @@ export default function Layout(props: { children?: JSX.Element }) {
         </header>
 
         {/* Page Content */}
-        <main class="flex-1 overflow-y-auto">
+        <main ref={contentRef} class="flex-1 overflow-y-auto page-enter">
           {props.children}
         </main>
       </div>

@@ -28,8 +28,10 @@
     "@tiptap/extension-image": "^3.26.0",
     "@tiptap/pm": "^3.26.0",
     "@tiptap/starter-kit": "^3.26.0",
+    "@types/sortablejs": "^1.15.9",
     "chart.js": "^4.5.1",
     "lucide-solid": "^1.17.0",
-    "solid-js": "^1.9.9"
+    "solid-js": "^1.9.9",
+    "sortablejs": "^1.15.7"
   }
 }

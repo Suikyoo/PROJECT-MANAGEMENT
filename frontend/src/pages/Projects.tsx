@@ -35,7 +35,7 @@ export default function Projects() {
 
   const isSupervisor = createMemo(() => {
     if (isClientMode()) return false;
-    try { return session()?.role === 'Supervisor'; } catch { return false; }
+    try { return (session()?.roles || []).includes('Supervisor'); } catch { return false; }
   });
 
   const handleCreate = async (e: Event) => {

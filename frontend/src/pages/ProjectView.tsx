@@ -1,6 +1,7 @@
 // ~/src/pages/ProjectView.tsx
-import { For, Show, createSignal, createResource, createMemo } from 'solid-js';
+import { For, Show, createSignal, createResource, createMemo, onCleanup } from 'solid-js';
 import { useParams, useSearchParams } from '@solidjs/router';
+import Sortable from 'sortablejs';
 import {
   getPhasesByProject, getTasksByPhase, createPhase, createTask,
   acceptTask, submitTask, approveTask,
@@ -133,12 +134,12 @@ export default function ProjectView() {
   };
   createResource(() => JSON.stringify(tasksByPhase()), loadAllTags);
 
-  const role = createMemo(() => {
-    try { return session()?.role || ''; } catch { return ''; }
+  const userRoles = createMemo(() => {
+    try { return session()?.roles || []; } catch { return [] as string[]; }
   });
-  const isSupervisor = () => role() === 'Supervisor';
-  const isDeveloper = () => role() === 'Developer';
-  const isQA = () => role() === 'QA';
+  const isSupervisor = () => userRoles().includes('Supervisor');
+  const isDeveloper = () => userRoles().includes('Developer');
+  const isQA = () => userRoles().includes('QA');
 
   // --- Project users (for developer initials) ---
   const [projectUsers, setProjectUsers] = createSignal<User[]>([]);
@@ -237,6 +238,45 @@ export default function ProjectView() {
 
   // --- Task Details Modal ---
   const [detailTask, setDetailTask] = createSignal<Task | null>(null);
+
+  // --- SortableJS drag / reorder ---
+  const sortableInstances = new Map<string, Sortable>();
+
+  const initSortable = (el: HTMLDivElement, phaseId: number, state: TaskState) => {
+    if (!el) return;
+    const key = `${phaseId}-${state}`;
+    const prev = sortableInstances.get(key);
+    if (prev) prev.destroy();
+
+    const s = Sortable.create(el, {
+      group: state,
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      fallbackOnBody: true,
+      filter: 'button, a, input, textarea, select',
+      preventOnFilter: false,
+      touchStartThreshold: 5,
+      onEnd: () => {
+        const items = [...el.children]
+          .map(c => Number((c as HTMLElement).dataset.taskId))
+          .filter(Boolean);
+        setTasksByPhase(prev => {
+          const all = [...(prev[phaseId] || [])];
+          const other = all.filter(t => t.state !== state);
+          const reordered = items.map(id => all.find(t => t.id === id)!).filter(Boolean) as Task[];
+          return { ...prev, [phaseId]: [...other, ...reordered] };
+        });
+      },
+    });
+    sortableInstances.set(key, s);
+  };
+
+  onCleanup(() => {
+    sortableInstances.forEach(s => s.destroy());
+    sortableInstances.clear();
+  });
 
   // Update a single task in tasksByPhase without a full refetch
   const updateTaskLocally = (phaseId: number, updated: Task) => {
@@ -364,9 +404,13 @@ export default function ProjectView() {
     return { cols, rows, colW, totalSpan, minDate: minD, maxDate: maxD };
   });
 
-  
   return (
     <div class="max-w-5xl">
+      <style>{`
+        .sortable-ghost { opacity: 0.3; border-radius: 4px; }
+        .sortable-chosen { opacity: 0.0; transform: scale(0.97); }
+        .sortable-drag { opacity: 0.9; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+      `}</style>
       <Show when={error()}><div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{error()}<button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button></div></Show>
 
       {/* Header */}
@@ -455,12 +499,19 @@ export default function ProjectView() {
                         <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{col.state}</span>
                         <span class="text-[10px] text-zinc-700 ml-auto font-medium bg-[#1A1A1E] px-1.5 py-0.5 rounded-full">{col.tasks.length}</span>
                       </div>
-                      <div class="flex flex-col gap-1.5 flex-1">
+                      <div
+                        class="flex flex-col gap-1.5 flex-1 touch-none"
+                        ref={(el) => initSortable(el, item().phase.id, col.state)}
+                      >
                         <For each={col.tasks}>{(task) => (
-                          <div class="bg-[#0B0B0C] border border-[#1F1F23] p-2 rounded-md hover:border-[#3F3F46] hover:bg-[#121214] transition-colors cursor-pointer group" onClick={() => setDetailTask(task)}>
-                            <div class="flex justify-between items-start mb-1">
-                              <h4 class="text-[11px] font-medium text-white leading-tight line-clamp-2 flex-1 mr-1 break-words">{task.title}</h4>
-                            </div>
+                        <div
+                          data-task-id={task.id}
+                          class="bg-[#0B0B0C] border border-[#1F1F23] p-2 rounded-md hover:border-[#3F3F46] hover:bg-[#121214] transition-colors cursor-grab active:cursor-grabbing group"
+                          onClick={() => setDetailTask(task)}
+                        >
+                              <div class="flex justify-between items-start mb-1">
+                                <h4 class="text-[11px] font-medium text-white leading-tight line-clamp-2 flex-1 mr-1 break-words">{task.title}</h4>
+                              </div>
                             <div class="flex items-center gap-1.5 mb-1.5">
                               <span class={`text-[9px] font-semibold uppercase ${
                                 task.priority === 'critical' ? 'text-red-400' :
@@ -802,7 +853,7 @@ export default function ProjectView() {
           backUrl={isClientMode() ? `/client/${tokenId()}/project/${projectId()}` : `/insider/project/${projectId()}`}
           onClose={() => setDetailTask(null)}
           onModified={reloadAllTasks}
-          role={role()}
+          roles={userRoles()}
           isClientMode={isClientMode()}
           isSupervisor={isSupervisor()}
           onAccept={async (id) => { await acceptTask(id); }}

@@ -1,5 +1,5 @@
 import { db } from "../lib/db/index.ts";
-import { projectTable, phaseTable, userTable, taskTable, phaseFeedbackTable, tagTable, projectLogTable } from "../lib/db/schema.ts";
+import { projectTable, phaseTable, userTable, taskTable, phaseCommentTable, tagTable, projectLogTable } from "../lib/db/schema.ts";
 import bcrypt from "bcryptjs";
 import type { Priority } from "../lib/db/enums.ts";
 import type { InferSelectViewModel } from "drizzle-orm";
@@ -80,7 +80,7 @@ async function seed() {
     "description": "Conduct project kick-off meeting; produce kick-off minutes and confirm scope",
     "start": "2026-06-09T00:00:00Z",
     "end": "2026-06-13T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -89,7 +89,7 @@ async function seed() {
     "description": "Provision Ubuntu VM, install PostgreSQL 16, configure Nginx TLS; get server environment live",
     "start": "2026-06-09T00:00:00Z",
     "end": "2026-06-13T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -98,7 +98,7 @@ async function seed() {
     "description": "Register OAuth app, obtain Service Account key, integrate Google Workspace",
     "start": "2026-06-09T00:00:00Z",
     "end": "2026-06-13T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -107,7 +107,7 @@ async function seed() {
     "description": "Deploy TRACK codebase to staging and verify accessibility",
     "start": "2026-06-09T00:00:00Z",
     "end": "2026-06-13T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -116,7 +116,7 @@ async function seed() {
     "description": "Run Prisma schema migrations and seed initial data",
     "start": "2026-06-16T00:00:00Z",
     "end": "2026-06-20T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -125,7 +125,7 @@ async function seed() {
     "description": "Create Google Drive VDR folder hierarchy for pilot project",
     "start": "2026-06-16T00:00:00Z",
     "end": "2026-06-20T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -152,7 +152,7 @@ async function seed() {
     "description": "Configure 7-role RBAC model and seed all 8 role accounts",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -161,7 +161,7 @@ async function seed() {
     "description": "Add ExternalParty login portal with NDA disclaimer and 3-step onboarding",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -170,7 +170,7 @@ async function seed() {
     "description": "Create WBS master template with Stage → Deliverable → Activity structure",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -179,7 +179,7 @@ async function seed() {
     "description": "Implement 60+ Excel-compatible functions, recursive parser and cross-column refs",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-07-04T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -188,7 +188,7 @@ async function seed() {
     "description": "Add Assigned (N) and Validator (O) columns with avatar chips and read-only validator chip",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-07-04T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -197,7 +197,7 @@ async function seed() {
     "description": "Add orange vertical Gantt markers and name flag per gate date",
     "start": "2026-06-30T00:00:00Z",
     "end": "2026-07-04T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "medium"
   },
   {
@@ -206,7 +206,7 @@ async function seed() {
     "description": "Add 'Request Amendment' button, mandatory reason field and RFC modal",
     "start": "2026-06-30T00:00:00Z",
     "end": "2026-07-04T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -215,7 +215,7 @@ async function seed() {
     "description": "Replace isDraft with canEdit (wbsStatus !== Approved) so add/row and reorder work",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -278,7 +278,7 @@ async function seed() {
     "description": "Implement Windows Explorer-style layout: folder tree + list/grid views, collapsible panels",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -287,7 +287,7 @@ async function seed() {
     "description": "Slide-in panel with metadata, storage badge, Preview/Download/Share actions",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -296,7 +296,7 @@ async function seed() {
     "description": "Drag-and-drop multi-file upload with per-file progress and folder upload support",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -305,7 +305,7 @@ async function seed() {
     "description": "Clickable indigo chips opening full-screen preview modal for documents",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -314,7 +314,7 @@ async function seed() {
     "description": "Add GET /api/documents/:id/preview endpoint with token param for inline PDF rendering",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -350,7 +350,7 @@ async function seed() {
     "description": "Set email HTML and in-app templates per governance rules; implement daily 8AM scan",
     "start": "2026-06-30T00:00:00Z",
     "end": "2026-07-04T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -359,7 +359,7 @@ async function seed() {
     "description": "Redesign share modal with pill toggle (Share by Link / Share by Email), expiration and view limits",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "medium"
   },
   {
@@ -368,7 +368,7 @@ async function seed() {
     "description": "Apply diagonal CONFIDENTIAL watermark and identity header/footer on protected documents",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -377,7 +377,7 @@ async function seed() {
     "description": "Add bcrypt-hashed accessPassword on SharedLink and show password gate in SharedView",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -386,7 +386,7 @@ async function seed() {
     "description": "Log SHA-256 fingerprint of IP+UserAgent on every access/preview/download in audit log",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "high"
   },
   {
@@ -458,7 +458,7 @@ async function seed() {
     "description": "Create 2-page PDF covering full file lifecycle with actor legend",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "low"
   },
   {
@@ -467,7 +467,7 @@ async function seed() {
     "description": "Implement 16-step guided tour covering Add Project → approval",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "low"
   },
   {
@@ -476,7 +476,7 @@ async function seed() {
     "description": "Add accordion with Project Setup → File Upload → Approval (15 steps) and actor labels",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "low"
   },
   {
@@ -854,7 +854,7 @@ async function seed() {
     "description": "Apply external sharing protocols, viewer-only restrictions and NDA gate on external portal",
     "start": "2026-06-23T00:00:00Z",
     "end": "2026-06-27T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "critical"
   },
   {
@@ -872,7 +872,7 @@ async function seed() {
     "description": "Pre-request credentials in W1 and use mock server for dev if delayed",
     "start": "2026-06-09T00:00:00Z",
     "end": "2026-06-13T00:00:00Z",
-    "state": "QA approved",
+    "state": "to review",
     "priority": "medium"
   },
   {
@@ -1457,7 +1457,7 @@ async function seed() {
   /*
   // Create tasks for Phase 2
   await db.insert(taskTable).values([
-    { phaseId: phase2.id, supervisorId: marcus.id, title: "API rate limiting", description: "Enforce depth limiters and token buckets.", state: "QA approved", developerId: alex.id, start: new Date("2026-06-05"), end: new Date("2026-06-12") },
+    { phaseId: phase2.id, supervisorId: marcus.id, title: "API rate limiting", description: "Enforce depth limiters and token buckets.", state: "to review", developerId: alex.id, start: new Date("2026-06-05"), end: new Date("2026-06-12") },
   ]);
 
   // Create a sample feedback

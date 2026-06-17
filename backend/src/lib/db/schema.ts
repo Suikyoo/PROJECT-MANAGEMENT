@@ -23,6 +23,12 @@ export const userTable = pgTable('users', {
   approved: text("approved").notNull().default("pending"), // "pending" | "approved" | "rejected"
 });
 
+export const userRoleTable = pgTable('user_roles', {
+  id: serial('id').primaryKey(),
+  userId: integer("user_id").references(() => userTable.id).notNull(),
+  role: text("role").notNull(),
+});
+
 export const taskTable = pgTable('tasks', {
 	id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references( () => phaseTable.id).notNull(),
@@ -37,7 +43,7 @@ export const taskTable = pgTable('tasks', {
   priority: text("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
 });
 
-export const projectFeedbackTable = pgTable('project_feedback', {
+export const projectCommentTable = pgTable('project_comments', {
   id: serial('id').primaryKey(),
   projectId: integer("project_id").references(() => projectTable.id).notNull(),
   userId: integer("user_id").references(() => userTable.id),
@@ -46,7 +52,7 @@ export const projectFeedbackTable = pgTable('project_feedback', {
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 
-export const phaseFeedbackTable = pgTable('phase_feedback', {
+export const phaseCommentTable = pgTable('phase_comments', {
   id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
   userId: integer("user_id").references(() => userTable.id),
@@ -65,6 +71,52 @@ export const phaseLogTable = pgTable('phase_logs', {
   id: serial('id').primaryKey(),
   phaseId: integer('phase_id').references(() => phaseTable.id).notNull().unique(),
   content: text('content').notNull().default(''),
+});
+
+// --- Issues ---
+
+export const resolutionTable = pgTable('resolutions', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').references((): any => issueTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  proof: text('proof'), // Jam link
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
+export const issueTable = pgTable('issues', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projectTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id),
+  authorName: text("author_name"),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  proof: text('proof'), // Jam link
+  priority: text("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
+  resolutionId: integer("resolution_id").references(() => resolutionTable.id),
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
+export const issueCommentTable = pgTable('issue_comments', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').references(() => issueTable.id).notNull(),
+  userId: integer("user_id").references(() => userTable.id),
+  authorName: text("author_name"),
+  content: text("content").notNull(),
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
+export const tagTypeTable = pgTable('tag_types', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+});
+
+export const issueTagTable = pgTable('issue_tags', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').references(() => issueTable.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  tagTypeId: integer('tag_type_id').references(() => tagTypeTable.id).notNull(),
 });
 
 export const tokenTable = pgTable('tokens', {

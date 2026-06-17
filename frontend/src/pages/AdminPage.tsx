@@ -84,6 +84,22 @@ export default function AdminPage() {
     window.location.href = '/admin';
   };
 
+  const handleDownloadBackup = async () => {
+    try {
+      const res = await fetch('/api/admin/backup', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to download backup');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'database-backup.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Backup download failed');
+    }
+  };
+
   const roles: Role[] = ['Supervisor', 'QA', 'Developer'];
   const displayedUsers = () => tab() === 'pending' ? pendingUsers() || [] : users() || [];
 
@@ -111,7 +127,10 @@ export default function AdminPage() {
 
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-semibold text-white">Admin Panel</h1>
-          <button onClick={() => setShowCreateToken(true)} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">+ Create Token</button>
+          <div class="flex gap-2">
+            <button onClick={handleDownloadBackup} class="bg-[#27272A] border border-[#3F3F46] text-zinc-300 text-xs px-4 py-2 rounded cursor-pointer hover:bg-[#3F3F46] transition-colors">📥 Backup CSV</button>
+            <button onClick={() => setShowCreateToken(true)} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">+ Create Token</button>
+          </div>
         </div>
 
         <div class="flex gap-1.5 mb-6 border-b border-[#1F1F23] pb-3">

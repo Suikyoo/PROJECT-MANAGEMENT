@@ -1,6 +1,6 @@
-import { eq, type InferSelectModel, inArray, and, isNotNull, sql } from "drizzle-orm";
+import { eq, type InferSelectModel, inArray, and, isNotNull } from "drizzle-orm";
 import { db } from "./index.ts";
-import { phaseTable, userTable, projectTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable } from "./schema.ts";
+import { phaseTable, userTable, userRoleTable, projectTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable } from "./schema.ts";
 
 export async function getProjects(): Promise<InferSelectModel<typeof projectTable>[]> {
   return await db.select().from(projectTable);
@@ -31,6 +31,11 @@ export async function getUserByEmail(email: string): Promise<InferSelectModel<ty
   return result[0];
 }
 
+export async function getRolesByUserId(userId: number): Promise<string[]> {
+  const rows = await db.select({ role: userRoleTable.role }).from(userRoleTable).where(eq(userRoleTable.userId, userId));
+  return rows.map(r => r.role);
+}
+
 export async function getPendingUsers(): Promise<InferSelectModel<typeof userTable>[]> {
   return await db.select().from(userTable).where(eq(userTable.approved, "pending"));
 }
@@ -47,12 +52,12 @@ export async function getTaskById(id: number): Promise<InferSelectModel<typeof t
   return await db.select().from(taskTable).where(eq(taskTable.id, id));
 }
 
-export async function getProjectFeedbacksByProjectId(projectId: number): Promise<InferSelectModel<typeof projectFeedbackTable>[]> {
-  return await db.select().from(projectFeedbackTable).where(eq(projectFeedbackTable.projectId, projectId));
+export async function getProjectCommentsByProjectId(projectId: number): Promise<InferSelectModel<typeof projectCommentTable>[]> {
+  return await db.select().from(projectCommentTable).where(eq(projectCommentTable.projectId, projectId));
 }
 
-export async function getPhaseFeedbacksByPhaseId(phaseId: number): Promise<InferSelectModel<typeof phaseFeedbackTable>[]> {
-  return await db.select().from(phaseFeedbackTable).where(eq(phaseFeedbackTable.phaseId, phaseId));
+export async function getPhaseCommentsByPhaseId(phaseId: number): Promise<InferSelectModel<typeof phaseCommentTable>[]> {
+  return await db.select().from(phaseCommentTable).where(eq(phaseCommentTable.phaseId, phaseId));
 }
 
 export async function getTasksByProjectId(projectId: number): Promise<InferSelectModel<typeof taskTable>[]> {
@@ -185,4 +190,32 @@ export async function getValidForgetSession(id: string): Promise<InferSelectMode
   const session = result[0];
   if (session && new Date(session.expiresAt) < new Date()) return undefined;
   return session;
+}
+
+// --- Issues ---
+
+export async function getIssuesByProjectId(projectId: number): Promise<InferSelectModel<typeof issueTable>[]> {
+  return await db.select().from(issueTable).where(eq(issueTable.projectId, projectId));
+}
+
+export async function getIssueById(id: number): Promise<InferSelectModel<typeof issueTable> | undefined> {
+  const result = await db.select().from(issueTable).where(eq(issueTable.id, id));
+  return result[0];
+}
+
+export async function getIssueCommentsByIssueId(issueId: number): Promise<InferSelectModel<typeof issueCommentTable>[]> {
+  return await db.select().from(issueCommentTable).where(eq(issueCommentTable.issueId, issueId));
+}
+
+export async function getIssueTagsByIssueId(issueId: number): Promise<InferSelectModel<typeof issueTagTable>[]> {
+  return await db.select().from(issueTagTable).where(eq(issueTagTable.issueId, issueId));
+}
+
+export async function getTagTypes(): Promise<InferSelectModel<typeof tagTypeTable>[]> {
+  return await db.select().from(tagTypeTable);
+}
+
+export async function getResolutionByIssueId(issueId: number): Promise<InferSelectModel<typeof resolutionTable> | undefined> {
+  const result = await db.select().from(resolutionTable).where(eq(resolutionTable.issueId, issueId));
+  return result[0];
 }

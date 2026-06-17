@@ -6,8 +6,9 @@ declare global {
   namespace Express {
     interface Locals {
       userId: number;
-      role: string;
+      roles: string[];
       email: string;
+      username: string;
       tokenId?: string;
       allowedProjectIds?: number[];
     }
@@ -26,8 +27,9 @@ export const authorize: RequestHandler = async (req, res, next) => {
   try {
     const payload = await verifyToken(token);
     res.locals.userId = payload.userId;
-    res.locals.role = payload.role;
+    res.locals.roles = payload.roles;
     res.locals.email = payload.email;
+    res.locals.username = payload.username;
   } catch (e) {
     return res.sendStatus(401);
   }
@@ -38,8 +40,8 @@ export const authorize: RequestHandler = async (req, res, next) => {
 // Require a specific role (or "Admin" bypass)
 export const requireRole = (...roles: string[]): RequestHandler => {
   return (_req, res, next) => {
-    if (res.locals.role === "Admin") return next();
-    if (roles.includes(res.locals.role)) return next();
+    if (res.locals.roles.includes("Admin")) return next();
+    if (res.locals.roles.some(r => roles.includes(r))) return next();
     return res.sendStatus(403);
   };
 };

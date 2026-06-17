@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "./index.ts";
-import { projectTable, phaseTable, userTable, taskTable, projectFeedbackTable, phaseFeedbackTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable } from "./schema.ts";
+import { projectTable, phaseTable, userTable, userRoleTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable } from "./schema.ts";
 import type { TaskState, Role, ApprovalStatus } from "./enums.ts";
 
 // --- User setters ---
@@ -28,6 +28,17 @@ export async function setUserRole(userId: number, role: Role) {
     .set({ role })
     .where(eq(userTable.id, userId))
     .returning();
+}
+
+export async function addUserRole(userId: number, role: string) {
+  const existing = await db.select().from(userRoleTable).where(and(eq(userRoleTable.userId, userId), eq(userRoleTable.role, role)));
+  if (existing.length > 0) return existing[0];
+  const result = await db.insert(userRoleTable).values({ userId, role }).returning();
+  return result[0];
+}
+
+export async function removeUserRole(userId: number, role: string) {
+  return await db.delete(userRoleTable).where(and(eq(userRoleTable.userId, userId), eq(userRoleTable.role, role)));
 }
 
 // --- Project setters ---
@@ -99,10 +110,10 @@ export async function approveTask(taskId: number) {
     .returning();
 }
 
-// --- Feedback setters ---
+// --- Comment setters ---
 
-export async function createProjectFeedback(projectId: number, userId: number | null, content: string, authorName?: string) {
-  const result = await db.insert(projectFeedbackTable).values({
+export async function createProjectComment(projectId: number, userId: number | null, content: string, authorName?: string) {
+  const result = await db.insert(projectCommentTable).values({
     projectId,
     userId,
     authorName,
@@ -111,8 +122,8 @@ export async function createProjectFeedback(projectId: number, userId: number | 
   return result[0];
 }
 
-export async function createPhaseFeedback(phaseId: number, userId: number | null, content: string, authorName?: string) {
-  const result = await db.insert(phaseFeedbackTable).values({
+export async function createPhaseComment(phaseId: number, userId: number | null, content: string, authorName?: string) {
+  const result = await db.insert(phaseCommentTable).values({
     phaseId,
     userId,
     authorName,
@@ -231,4 +242,58 @@ export async function setUserPassword(userId: number, passwordHash: string) {
     .set({ passwordHash })
     .where(eq(userTable.id, userId))
     .returning();
+}
+
+// --- Issue setters ---
+
+export async function createIssue(projectId: number, title: string, description: string, userId?: number | null, authorName?: string, proof?: string, priority?: "low" | "medium" | "high" | "critical") {
+  const result = await db.insert(issueTable).values({
+    projectId,
+    userId: userId ?? null,
+    authorName: authorName ?? null,
+    title,
+    description,
+    proof,
+    priority: priority || "medium",
+  }).returning();
+  return result[0];
+}
+
+export async function createIssueComment(issueId: number, userId: number | null, content: string, authorName?: string) {
+  const result = await db.insert(issueCommentTable).values({
+    issueId,
+    userId,
+    authorName,
+    content,
+  }).returning();
+  return result[0];
+}
+
+export async function createIssueTag(issueId: number, name: string, tagTypeId: number) {
+  const result = await db.insert(issueTagTable).values({ issueId, name, tagTypeId }).returning();
+  return result[0];
+}
+
+export async function deleteIssueTag(tagId: number) {
+  return await db.delete(issueTagTable).where(eq(issueTagTable.id, tagId)).returning();
+}
+
+export async function createTagType(name: string) {
+  const result = await db.insert(tagTypeTable).values({ name }).returning();
+  return result[0];
+}
+
+export async function createResolution(issueId: number, userId: number, title: string, description: string, proof?: string) {
+  const [resolution] = await db.insert(resolutionTable).values({
+    issueId,
+    userId,
+    title,
+    description,
+    proof,
+  }).returning();
+  // Link the resolution to the issue
+  await db.update(issueTable)
+    .set({ resolutionId: resolution.id })
+    .where(eq(issueTable.id, issueId));
+  return resolution;
 }
