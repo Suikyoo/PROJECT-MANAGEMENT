@@ -212,11 +212,11 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
                   <p class="text-[13px] text-zinc-500 italic">Unassigned</p>
                 }>
                   {(d) => {
-                    const c = nameToColor(d().name || d().username);
+                    const c = nameToColor(d().name || d().email);
                     return (
                       <div class="flex items-center gap-2">
-                        <span style={{"background-color": c.bg, color: c.text}} class="w-6 h-6 rounded-full text-[11px] font-semibold flex items-center justify-center shrink-0 uppercase">{getInitials(d().name || d().username)}</span>
-                        <p class="text-[13px] text-zinc-300">{d().name || d().username}</p>
+                        <span style={{"background-color": c.bg, color: c.text}} class="w-6 h-6 rounded-full text-[11px] font-semibold flex items-center justify-center shrink-0 uppercase">{getInitials(d().name || d().email)}</span>
+                        <p class="text-[13px] text-zinc-300">{d().name || d().email}</p>
                       </div>
                     );
                   }}
@@ -230,11 +230,11 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
                   <p class="text-[13px] text-zinc-500 italic">Unassigned</p>
                 }>
                   {(s) => {
-                    const c = nameToColor(s().name || s().username);
+                    const c = nameToColor(s().name || s().email);
                     return (
                       <div class="flex items-center gap-2">
-                        <span style={{"background-color": c.bg, color: c.text}} class="w-6 h-6 rounded-full text-[11px] font-semibold flex items-center justify-center shrink-0 uppercase">{getInitials(s().name || s().username)}</span>
-                        <p class="text-[13px] text-zinc-300">{s().name || s().username}</p>
+                        <span style={{"background-color": c.bg, color: c.text}} class="w-6 h-6 rounded-full text-[11px] font-semibold flex items-center justify-center shrink-0 uppercase">{getInitials(s().name || s().email)}</span>
+                        <p class="text-[13px] text-zinc-300">{s().name || s().email}</p>
                       </div>
                     );
                   }}

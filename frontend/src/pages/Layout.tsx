@@ -4,7 +4,7 @@ import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import { getProjects, logout, tokenGetProjects, type Project } from '../lib/fetch';
 import { session, setSession, getProjectById } from '../lib/store';
-import { LayoutDashboard, Columns, List, Search, ChevronLeft, ChevronRight, ChevronDown, Plus, Settings, Activity, LogOut, ChartNoAxesGantt } from 'lucide-solid';
+import { LayoutDashboard, Columns, List, Search, ChevronLeft, ChevronRight, ChevronDown, Plus, Settings, Activity, LogOut, ChartNoAxesGantt, User } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
 
 export default function Layout(props: { children?: JSX.Element }) {
@@ -196,6 +196,17 @@ export default function Layout(props: { children?: JSX.Element }) {
               <Settings size={15} />
               <span>Admin</span>
             </A>
+            <A
+              href={`${basePath()}/user`}
+              class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
+                location.pathname === `${basePath()}/user`
+                  ? 'text-blue-400 bg-blue-600/15'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
+              }`}
+            >
+              <User size={15} />
+              <span>User</span>
+            </A>
           </Show>
 
           {/* User Footer — insider only */}
@@ -223,8 +234,19 @@ export default function Layout(props: { children?: JSX.Element }) {
             </div>
           </Show>
 
-          {/* Collapsed user avatar only */}
+          {/* Collapsed user links */}
           <Show when={!isClientMode() && !sidebarExpanded()}>
+            <A
+              href={`${basePath()}/user`}
+              class={`flex justify-center py-1.5 rounded-md transition-colors ${
+                location.pathname === `${basePath()}/user`
+                  ? 'text-blue-400 bg-blue-600/15'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title="User Settings"
+            >
+              <User size={15} />
+            </A>
             <button
               onClick={handleLogout}
               class="flex justify-center py-1 text-zinc-500 hover:text-zinc-300 cursor-pointer border-none bg-transparent"

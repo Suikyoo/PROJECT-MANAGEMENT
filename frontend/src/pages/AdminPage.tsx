@@ -144,7 +144,7 @@ export default function AdminPage() {
                 <For each={displayedUsers()}>{(user) => (
                   <tr class="text-zinc-300 hover:bg-[#121214] transition-colors">
                     <td class="p-3 font-medium text-white">{user.name}</td>
-                    <td class="p-3 text-zinc-500">{user.username}</td>
+                    <td class="p-3 text-zinc-500">{user.email}</td>
                     <td class="p-3">
                       <select
                         value={user.role}

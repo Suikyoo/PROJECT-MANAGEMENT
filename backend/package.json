@@ -1,18 +1,43 @@
 {
-  "name": "server-database architecture template",
-  "version": "1.0.0",
-  "description": "a template I just use on the go",
+  "name": "inscribing-ceremony-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "super-start": "cd database-server && docker compose up -d && cd .. && cd backend-server && npm install && npm run db:generate && npm run db:push &&  npm run seed && npm run start"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
-    "concurrently": "^9.2.1"
+    "start": "npx tsx --env-file=../.env --watch  src/index.ts",
+    "seed:run": "npx tsx --env-file=../.env src/seed/seed.ts",
+    "clear": "npx tsx --env-file=../.env src/seed/clear.ts",
+    "db:push": "drizzle-kit push --config ./drizzle.config.ts --force",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "seed": "npm run db:generate && yes | npm run db:push -- --yes && npm run seed:run"
   },
   "dependencies": {
-    "@types/cors": "^2.8.19"
+    "@types/ws": "^8.18.1",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "google-auth-library": "^10.7.0",
+    "jose": "^6.2.3",
+    "multer": "^2.1.1",
+    "nodemailer": "^9.0.0",
+    "postgres": "^3.4.9",
+    "ws": "^8.21.0",
+    "wss": "^3.3.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
+    "@types/nodemailer": "^8.0.1",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.0",
+    "typescript": "~6.0.2"
   }
 }

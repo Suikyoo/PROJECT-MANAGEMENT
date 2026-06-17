@@ -8,7 +8,7 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export interface User {
   id: number;
   name: string;
-  username: string;
+  email: string;
   role: Role;
   approved: ApprovalStatus;
 }
@@ -78,7 +78,7 @@ export interface PhaseLog {
 
 export interface SessionUser {
   userId: number;
-  username: string;
+  email: string;
   name: string;
   role: string;
 }
@@ -99,16 +99,30 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // Auth
-export const login = (username: string, password: string) =>
-  api<{ ok: boolean; role: string; userId: number; name: string }>('/auth/login', {
+export const login = (email: string, password: string) =>
+  api<{ ok: boolean; role: string; userId: number; name: string; otpRequired?: boolean }>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
 
-export const signup = (name: string, username: string, password: string) =>
+export const signup = (name: string, email: string, password: string) =>
   api<{ ok: boolean; userId: number; message: string }>('/auth/signup', {
     method: 'POST',
-    body: JSON.stringify({ name, username, password }),
+    body: JSON.stringify({ name, email, password }),
+  });
+
+// Google OAuth — signup (pending approval, same as /auth/signup)
+export const googleOAuthSignup = (accessToken: string) =>
+  api<{ ok: boolean; userId: number; message: string }>('/auth/oauth/google/signup', {
+    method: 'POST',
+    body: JSON.stringify({ accessToken }),
+  });
+
+// Google OAuth — login (requires approval + OTP, same as /auth/login)
+export const googleOAuthLogin = (accessToken: string) =>
+  api<{ ok: boolean; otpRequired?: boolean; email?: string }>('/auth/oauth/google/login', {
+    method: 'POST',
+    body: JSON.stringify({ accessToken }),
   });
 
 export const logout = () =>
@@ -118,10 +132,10 @@ export const getMe = () =>
   api<SessionUser>('/auth/me');
 
 // Admin auth
-export const adminLogin = (username: string, password: string) =>
+export const adminLogin = (email: string, password: string) =>
   api<{ ok: boolean; role: string }>('/auth/admin/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
 
 // Projects
@@ -342,6 +356,32 @@ export const setUserRole = (userId: number, role: Role) =>
 
 export const deleteUser = (userId: number) =>
   api<User[]>('/admin/users/' + userId, { method: 'DELETE' });
+
+// OTP
+export const verifyOTP = (email: string, otp: string) =>
+  api<{ ok: boolean; role: string; userId: number; name: string }>('/auth/verify-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp }),
+  });
+
+export const resendOTP = (email: string) =>
+  api<{ ok: boolean }>('/auth/resend-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
+// Forget Password
+export const requestForgetPassword = (email: string) =>
+  api<{ ok: boolean; message: string }>('/auth/forget-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
+export const resetForgetPassword = (sessionUuid: string, password: string) =>
+  api<{ ok: boolean; message: string }>(`/forget/user/${sessionUuid}`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
 
 // Admin: token management
 export interface Token {

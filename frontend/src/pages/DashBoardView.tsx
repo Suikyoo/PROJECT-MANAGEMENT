@@ -454,14 +454,14 @@ project()!.state === 'completed' ? 'bg-blue-500/10 text-blue-400' :
             <div class="flex -space-x-1 ml-auto">
               <For each={(projectUsers() || []).slice(0, 6)}>
                 {(user) => {
-                  const color = nameToColor(user.name || user.username);
+                  const color = nameToColor(user.name || user.email);
                   return (
                     <div
-                      title={user.name || user.username}
+                      title={user.name || user.email}
                       class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0 ring-1 ring-[#0B0B0C]"
                       style={{ background: color.bg }}
                     >
-                      {getInitials(user.name || user.username)}
+                      {getInitials(user.name || user.email)}
                     </div>
                   );
                 }}
@@ -612,8 +612,8 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
                       {(() => {
                         const dev = getUserById(task.developerId);
                         if (!dev) return <span class="text-zinc-700 shrink-0">—</span>;
-                        const c = nameToColor(dev.name || dev.username);
-                        return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.username)}</span>;
+                        const c = nameToColor(dev.name || dev.email);
+                        return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.email)}</span>;
                       })()}
 
                       {task.end && (
@@ -645,11 +645,11 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
               return (
                 <div class="bg-[#121214] border border-[#1F1F23] rounded-lg p-4 flex items-start gap-3">
                   <div class="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                    {(user.name || user.username).charAt(0).toUpperCase()}
+                    {(user.name || user.email).charAt(0).toUpperCase()}
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="font-medium text-sm text-zinc-200">{user.name}</div>
-                    <div class="text-[10px] font-mono text-zinc-500">@{user.username}</div>
+                    <div class="text-[10px] font-mono text-zinc-500">@{user.email}</div>
                     <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full mt-1 ${roleColors[user.role] || 'bg-zinc-800 text-zinc-400'}`}>{user.role}</span>
                     <div class="text-[10px] font-mono text-zinc-600 mt-1">{userTasks.length} tasks</div>
                   </div>

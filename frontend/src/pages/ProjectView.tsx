@@ -446,7 +446,7 @@ export default function ProjectView() {
                   <button onClick={() => openCreateTask(item().phase.id)} class="bg-[#1F1F23] hover:bg-[#27272A] text-zinc-400 hover:text-white text-[10px] font-medium py-1 px-2.5 rounded-md cursor-pointer transition-colors border border-[#27272A] whitespace-nowrap shrink-0">+ Task</button>
                 </Show>
               </div>
-              <div class={`transition-all ${phaseViewSize() === 0 ? 'max-h-0 overflow-hidden' : phaseViewSize() === 1 ? 'max-h-[220px] overflow-y-auto ' : ''}`}>
+              <div class={`transition-all ${phaseViewSize() === 0 ? 'max-h-0 overflow-hidden' : phaseViewSize() === 1 ? 'max-h-[400px] overflow-y-auto ' : ''}`}>
                 <div class="grid grid-cols-4 gap-0">
                   <For each={item().columns}>{(col) => (
                     <div class="p-2 border-r border-[#1F1F23] last:border-r-0 min-h-[80px] flex flex-col">
@@ -487,8 +487,8 @@ export default function ProjectView() {
                               {(() => {
                                 const dev = getUserById(task.developerId);
                                 if (!dev) return <span class="text-[9px] text-zinc-600">—</span>;
-                                const c = nameToColor(dev.name || dev.username);
-                                return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.username)}</span>;
+                                const c = nameToColor(dev.name || dev.email);
+                                return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.email)}</span>;
                               })()}
                               <div class="flex gap-0.5">
                                 <Show when={isDeveloper() && task.state === 'backlog'}>
@@ -566,8 +566,8 @@ export default function ProjectView() {
                       {(() => {
                         const dev = getUserById(task.developerId);
                         if (!dev) return <span class="text-zinc-600 text-[11px]">—</span>;
-                        const c = nameToColor(dev.name || dev.username);
-                        return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.username)}</span>;
+                        const c = nameToColor(dev.name || dev.email);
+                        return <span style={{"background-color": c.bg, color: c.text}} class="w-5 h-5 rounded-full text-[9px] font-semibold flex items-center justify-center shrink-0 uppercase" title={dev.name}>{getInitials(dev.name || dev.email)}</span>;
                       })()}
                     </td>
                     <td class="p-2.5 text-zinc-500 text-[11px]">{task.end ? new Date(task.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</td>

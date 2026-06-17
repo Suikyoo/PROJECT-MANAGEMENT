@@ -1,0 +1,7 @@
+node_modules
+.git
+**/node_modules
+**/dist
+.vite
+backend/node_modules
+frontend/node_modules

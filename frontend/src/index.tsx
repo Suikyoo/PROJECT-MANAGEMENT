@@ -12,11 +12,14 @@ import AdminLogin from './pages/AdminLogin';
 import AdminPage from './pages/AdminPage';
 import "./index.css"
 import ProjectLayout from './pages/ProjectLayout';
+import UserView from './pages/UserView';
+import ForgetPasswordReset from './pages/ForgetPasswordReset';
 
 render(
   () => (
     <Router>
-      <Route path="/login" component={InsiderLogin} />
+      <Route path="/insider/login" component={InsiderLogin} />
+      <Route path="/insider/forget-password/:sessionUuid" component={ForgetPasswordReset} />
 
       <Route path="/client/:token_id" component={Layout}>
         <Route path="/" component={Projects} />
@@ -29,6 +32,7 @@ render(
 
       <Route path="/insider" component={Layout}>
         <Route path="/" component={Projects} />
+        <Route path="/user" component={UserView} />
         <Route path="/project/:project_id" component={ProjectLayout} >
           <Route path="/" component={DashBoardView} />
           <Route path="/tasks" component={ProjectView} />

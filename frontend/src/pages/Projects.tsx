@@ -233,7 +233,7 @@ export default function Projects() {
       {/* Greeting Header */}
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-xl font-semibold text-white">{greetingText()}, {session()?.username || 'User'}!</h1>
+          <h1 class="text-xl font-semibold text-white">{greetingText()}, {session()?.email || 'User'}!</h1>
           <p class="text-xs text-zinc-500 mt-1">{todayDate}</p>
         </div>
         <Show when={isSupervisor()}>
@@ -308,14 +308,14 @@ export default function Projects() {
                         <div class="flex items-center gap-1 mt-2">
                           <For each={(projectUsers()[project.id] || []).slice(0, 5)}>
                             {(user) => {
-                              const color = nameToColor(user.name || user.username);
+                              const color = nameToColor(user.name || user.email);
                               return (
                                 <div
-                                  title={user.name || user.username}
+                                  title={user.name || user.email}
                                   class="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0"
                                   style={{ background: color.bg }}
                                 >
-                                  {getInitials(user.name || user.username)}
+                                  {getInitials(user.name || user.email)}
                                 </div>
                               );
                             }}
@@ -393,7 +393,7 @@ export default function Projects() {
                 {(() => {
                   const users = allUsers();
                   const userMap: Record<number, string> = {};
-                  users.forEach(u => { userMap[u.id] = u.name || u.username; });
+                  users.forEach(u => { userMap[u.id] = u.name || u.email; });
                   const all = allTasks();
                   const assigned: Record<string, { count: number; total: number }> = {};
                   all.forEach(t => {
