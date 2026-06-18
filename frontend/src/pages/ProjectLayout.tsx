@@ -18,7 +18,7 @@ export default function ProjectLayout({children}: {children?: JSX.Element}) {
 
   return (
     <div class="h-full overflow-hidden flex flex-col">
-      <div class="flex-1 overflow-y-auto">
+      <div class="h-screen overflow-y-auto">
         {children}
       </div>
     </div>

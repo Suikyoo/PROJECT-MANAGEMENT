@@ -12,8 +12,9 @@ import {
   getTagsByTaskId, getTagsByProjectId,
   getProjectUsers, getValidOtpSession, getValidForgetSession,
   getIssuesByProjectId, getIssueById, getIssueCommentsByIssueId,
-  getIssueTagsByIssueId, getTagTypes, getResolutionByIssueId,
+  getIssueTagsByIssueId, getTagTypes, getResolutionsByIssueId,
   getIssueTransactionsByIssueId, getResolutionTransactionsByResolutionId,
+  getResolvedIssueIdsByProject, isIssueResolved,
   getRolesByUserId,
 } from "./lib/db/getter.ts"
 import { 
@@ -661,7 +662,9 @@ export function configRoutes(app: Express) {
   
   app.get("/projects/:id/issues", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
-    return res.json(await getIssuesByProjectId(projectId));
+    const issues = await getIssuesByProjectId(projectId);
+    const resolvedIds = await getResolvedIssueIdsByProject(projectId);
+    return res.json(issues.map(i => ({ ...i, resolved: resolvedIds.has(i.id) })));
   });
 
   app.post("/projects/:id/issues", authenticate, restrictProject, async (req, res) => {
@@ -683,7 +686,8 @@ export function configRoutes(app: Express) {
     if (res.locals.userId === -1 && !res.locals.allowedProjectIds?.includes(issue.projectId)) {
       return res.status(403).json({ error: "Unauthorized" });
     }
-    return res.json(issue);
+    const resolved = await isIssueResolved(id);
+    return res.json({ ...issue, resolved });
   });
 
   // Issue comments
@@ -737,13 +741,31 @@ export function configRoutes(app: Express) {
     const issueId = Number(req.params.id);
     const { title, description, proof } = req.body as { title?: string; description?: string; proof?: string };
     if (!title) return res.status(400).json({ error: "title required" });
+
+    // Only allow resolution creation if issue is "testing"
+    const issueTxs = await getIssueTransactionsByIssueId(issueId);
+    const issueState = issueTxs.length > 0 ? issueTxs[issueTxs.length - 1].action : null;
+    if (issueState !== "testing") {
+      return res.status(400).json({ error: "Resolutions can only be created when the issue is in testing" });
+    }
+
+    // Check existing resolutions: allowed only if none exist, or latest was "revise"
+    const existingRes = await getResolutionsByIssueId(issueId);
+    if (existingRes.length > 0) {
+      const latestRes = existingRes[existingRes.length - 1];
+      const resTxs = await getResolutionTransactionsByResolutionId(latestRes.id);
+      const lastAction = resTxs.length > 0 ? resTxs[resTxs.length - 1].action : null;
+      if (lastAction !== "revise") {
+        return res.status(400).json({ error: "A new resolution can only be created after the previous one was marked for revision" });
+      }
+    }
+
     return res.json(await createResolution(issueId, res.locals.userId, title, description || "", proof));
   });
 
   app.get("/issues/:id/resolution", authenticate, async (req, res) => {
     const issueId = Number(req.params.id);
-    const resolution = await getResolutionByIssueId(issueId);
-    return res.json(resolution || null);
+    return res.json(await getResolutionsByIssueId(issueId));
   });
 
   // ---- Issue transactions (insiders only stamp) ----
@@ -754,11 +776,26 @@ export function configRoutes(app: Express) {
 
   app.post("/issues/:id/transactions", authenticate, requireInsider, async (req, res) => {
     const issueId = Number(req.params.id);
-    const { action } = req.body as { action?: string };
+    const { action, message } = req.body as { action?: string; message?: string };
     if (!action || !["open", "testing", "closed", "rejected"].includes(action)) {
       return res.status(400).json({ error: "action must be open, testing, closed, or rejected" });
     }
-    return res.json(await createIssueTransaction(issueId, action as any, res.locals.userId, undefined, res.locals.username));
+
+    // Enforce one-way state machine: open → testing → closed | rejected (no going back)
+    const past = await getIssueTransactionsByIssueId(issueId);
+    const current = past.length > 0 ? past[past.length - 1].action : null;
+    const validTransitions: Record<string, string[]> = {
+      open: ["testing", "rejected"],
+      testing: ["closed", "rejected"],
+      closed: [],
+      rejected: [],
+    };
+    const allowed = current ? (validTransitions[current] || []) : [];
+    if (!allowed.includes(action)) {
+      return res.status(400).json({ error: `Cannot move from "${current}" to "${action}"` });
+    }
+
+    return res.json(await createIssueTransaction(issueId, action as any, res.locals.userId, undefined, res.locals.username, message));
   });
 
   // ---- Resolution transactions (client tokens only stamp) ----
@@ -769,11 +806,18 @@ export function configRoutes(app: Express) {
 
   app.post("/resolutions/:id/transactions", authenticate, requireToken, async (req, res) => {
     const resolutionId = Number(req.params.id);
-    const { action } = req.body as { action?: string };
+    const { action, message } = req.body as { action?: string; message?: string };
     if (!action || !["to-review", "revise", "resolved"].includes(action)) {
       return res.status(400).json({ error: "action must be to-review, revise, or resolved" });
     }
-    return res.json(await createResolutionTransaction(resolutionId, action as any, res.locals.tokenId, undefined, res.locals.username));
+
+    // Each client token can only stamp a resolution once
+    const past = await getResolutionTransactionsByResolutionId(resolutionId);
+    if (past.some(t => t.tokenId === res.locals.tokenId)) {
+      return res.status(400).json({ error: "You have already responded to this resolution" });
+    }
+
+    return res.json(await createResolutionTransaction(resolutionId, action as any, res.locals.tokenId, undefined, res.locals.username, message));
   });
 
 }

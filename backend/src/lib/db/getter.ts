@@ -203,6 +203,34 @@ export async function getIssueById(id: number): Promise<InferSelectModel<typeof 
   return result[0];
 }
 
+/** Returns a Set of issue IDs that have a resolution transaction with action "resolved" */
+export async function getResolvedIssueIdsByProject(projectId: number): Promise<Set<number>> {
+  const result = await db
+    .select({ id: issueTable.id })
+    .from(issueTable)
+    .innerJoin(resolutionTable, eq(issueTable.id, resolutionTable.issueId))
+    .innerJoin(resolutionTransactionTable, eq(resolutionTable.id, resolutionTransactionTable.resolutionId))
+    .where(and(
+      eq(issueTable.projectId, projectId),
+      eq(resolutionTransactionTable.action, 'resolved')
+    ));
+  return new Set(result.map(r => r.id));
+}
+
+/** Returns whether a single issue has a resolution transaction with action "resolved" */
+export async function isIssueResolved(issueId: number): Promise<boolean> {
+  const result = await db
+    .select({ id: resolutionTransactionTable.id })
+    .from(resolutionTable)
+    .innerJoin(resolutionTransactionTable, eq(resolutionTable.id, resolutionTransactionTable.resolutionId))
+    .where(and(
+      eq(resolutionTable.issueId, issueId),
+      eq(resolutionTransactionTable.action, 'resolved')
+    ))
+    .limit(1);
+  return result.length > 0;
+}
+
 export async function getIssueCommentsByIssueId(issueId: number): Promise<InferSelectModel<typeof issueCommentTable>[]> {
   return await db.select().from(issueCommentTable).where(eq(issueCommentTable.issueId, issueId));
 }
@@ -215,9 +243,14 @@ export async function getTagTypes(): Promise<InferSelectModel<typeof tagTypeTabl
   return await db.select().from(tagTypeTable);
 }
 
+export async function getResolutionsByIssueId(issueId: number): Promise<InferSelectModel<typeof resolutionTable>[]> {
+  return await db.select().from(resolutionTable).where(eq(resolutionTable.issueId, issueId)).orderBy(resolutionTable.createdAt);
+}
+
+// Legacy convenience — returns the latest resolution (or undefined)
 export async function getResolutionByIssueId(issueId: number): Promise<InferSelectModel<typeof resolutionTable> | undefined> {
-  const result = await db.select().from(resolutionTable).where(eq(resolutionTable.issueId, issueId));
-  return result[0];
+  const result = await db.select().from(resolutionTable).where(eq(resolutionTable.issueId, issueId)).orderBy(resolutionTable.createdAt);
+  return result[result.length - 1];
 }
 
 export async function getIssueTransactionsByIssueId(issueId: number): Promise<InferSelectModel<typeof issueTransactionTable>[]> {

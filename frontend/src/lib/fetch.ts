@@ -9,7 +9,6 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: Role;
   roles: string[];
   approved: ApprovalStatus;
 }
@@ -76,7 +75,7 @@ export interface Issue {
   description: string;
   proof: string;
   priority: IssuePriority;
-  resolutionId: number | null;
+  resolved: boolean;
   createdAt: string;
 }
 
@@ -120,6 +119,7 @@ export interface IssueTransaction {
   tokenId: string | null;
   authorName: string | null;
   action: IssueAction;
+  message: string | null;
   createdAt: string;
 }
 
@@ -130,6 +130,7 @@ export interface ResolutionTransaction {
   tokenId: string | null;
   authorName: string | null;
   action: ResolutionAction;
+  message: string | null;
   createdAt: string;
 }
 
@@ -149,7 +150,6 @@ export interface SessionUser {
   userId: number;
   email: string;
   name: string;
-  role: string;
   roles: string[];
 }
 
@@ -362,26 +362,26 @@ export const createResolution = (issueId: number, title: string, description?: s
   }, tokenId);
 
 export const getResolution = (issueId: number, tokenId?: string) =>
-  api<Resolution | null>('/issues/' + issueId + '/resolution', undefined, tokenId);
+  api<Resolution[]>('/issues/' + issueId + '/resolution', undefined, tokenId);
 
 // Issue Transactions (insiders only stamp)
 export const getIssueTransactions = (issueId: number, tokenId?: string) =>
   api<IssueTransaction[]>('/issues/' + issueId + '/transactions', undefined, tokenId);
 
-export const createIssueTransaction = (issueId: number, action: IssueAction, tokenId?: string) =>
+export const createIssueTransaction = (issueId: number, action: IssueAction, message?: string, tokenId?: string) =>
   api<IssueTransaction>('/issues/' + issueId + '/transactions', {
     method: 'POST',
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ action, message }),
   }, tokenId);
 
 // Resolution Transactions (client tokens only stamp)
 export const getResolutionTransactions = (resolutionId: number, tokenId?: string) =>
   api<ResolutionTransaction[]>('/resolutions/' + resolutionId + '/transactions', undefined, tokenId);
 
-export const createResolutionTransaction = (resolutionId: number, action: ResolutionAction, tokenId?: string) =>
+export const createResolutionTransaction = (resolutionId: number, action: ResolutionAction, message?: string, tokenId?: string) =>
   api<ResolutionTransaction>('/resolutions/' + resolutionId + '/transactions', {
     method: 'POST',
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ action, message }),
   }, tokenId);
 
 export const uploadImage = async (file: File): Promise<{ url: string }> => {

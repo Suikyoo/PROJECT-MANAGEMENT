@@ -248,7 +248,15 @@ export async function createIssue(projectId: number, title: string, description:
     proof,
     priority: priority || "medium",
   }).returning();
-  return result[0];
+  const issue = result[0];
+  // Auto-stamp initial "open" action so the issue appears in the messenger timeline
+  await db.insert(issueTransactionTable).values({
+    issueId: issue.id,
+    userId: userId ?? null,
+    authorName: authorName ?? null,
+    action: "open",
+  });
+  return issue;
 }
 
 export async function createIssueComment(issueId: number, userId: number | null, content: string, authorName?: string) {
@@ -275,25 +283,28 @@ export async function createTagType(name: string) {
   return result[0];
 }
 
-export async function createIssueTransaction(issueId: number, action: "open" | "testing" | "closed" | "rejected", userId?: number | null, tokenId?: string, authorName?: string) {
+export async function createIssueTransaction(issueId: number, action: "open" | "testing" | "closed" | "rejected", userId?: number | null, tokenId?: string, authorName?: string, message?: string) {
   const result = await db.insert(issueTransactionTable).values({
     issueId,
     action,
     userId: userId ?? null,
     tokenId: tokenId ?? null,
     authorName: authorName ?? null,
+    message: message ?? null,
   }).returning();
   return result[0];
 }
 
-export async function createResolutionTransaction(resolutionId: number, action: "to-review" | "revise" | "resolved", tokenId?: string, userId?: number | null, authorName?: string) {
+export async function createResolutionTransaction(resolutionId: number, action: "to-review" | "revise" | "resolved", tokenId?: string, userId?: number | null, authorName?: string, message?: string) {
   const result = await db.insert(resolutionTransactionTable).values({
     resolutionId,
     action,
     tokenId: tokenId ?? null,
     userId: userId ?? null,
     authorName: authorName ?? null,
+    message: message ?? null,
   }).returning();
+
   return result[0];
 }
 
@@ -305,9 +316,11 @@ export async function createResolution(issueId: number, userId: number, title: s
     description,
     proof,
   }).returning();
-  // Link the resolution to the issue
-  await db.update(issueTable)
-    .set({ resolutionId: resolution.id })
-    .where(eq(issueTable.id, issueId));
+  // Auto-stamp initial "to-review" action so the resolution appears in the messenger timeline
+  await db.insert(resolutionTransactionTable).values({
+    resolutionId: resolution.id,
+    userId,
+    action: "to-review",
+  });
   return resolution;
 }

@@ -94,14 +94,7 @@ export default function UserView() {
   const displayUser = () => isProfileView() ? profileUser() : currentUser();
   const userName = () => displayUser()?.name ?? 'Guest';
   const userEmail = () => displayUser()?.email ?? '';
-  const userRole = () => displayUser()?.role ?? '';
   const userRoles = () => displayUser()?.roles || [];
-
-  // Combine primary + additional roles uniquely
-  const allRoles = () => {
-    const set = new Set<string>([userRole(), ...userRoles()]);
-    return [...set].filter(Boolean);
-  };
 
   const [form, setForm] = createSignal({
     name: userName(),
@@ -118,7 +111,7 @@ export default function UserView() {
     review: true,
     approved: true,
     blocked: true,
-    phaseReview: allRoles().some(r => r === 'Client' || r === 'Supervisor'),
+    phaseReview: userRoles().some(r => r === 'Client' || r === 'Supervisor'),
     dueSoon: true,
   });
 
@@ -152,7 +145,7 @@ export default function UserView() {
                   <div class="text-sm font-semibold text-zinc-200">{userName()}</div>
                   <div class="text-xs text-zinc-500 mt-0.5">{userEmail()}</div>
                   <div class="flex flex-wrap gap-1.5 mt-2">
-                    <For each={allRoles()}>
+                    <For each={userRoles()}>
                       {(role) => <RoleBadge role={role} />}
                     </For>
                   </div>
@@ -215,7 +208,7 @@ export default function UserView() {
           <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden">
             <div class="px-5 py-3 border-b border-[#1F1F23] flex items-center justify-between">
               <span class="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Your Roles</span>
-              <span class="text-[10px] text-zinc-600">{allRoles().length} role(s)</span>
+              <span class="text-[10px] text-zinc-600">{userRoles().length} role(s)</span>
             </div>
             <div class="p-4 space-y-2">
               <p class="text-xs text-zinc-400 mb-3">
@@ -223,7 +216,7 @@ export default function UserView() {
               </p>
               <For each={ALL_ROLES}>
                 {({ value, label, bg, text }: { value: string; label: string; bg: string; text: string; desc?: string }) => {
-                  const active = allRoles().includes(value);
+                  const active = userRoles().includes(value);
                   const descriptions: Record<string, string> = {
                     Supervisor: 'Full access — create projects, manage team',
                     QA: 'Approve & reject reviews',

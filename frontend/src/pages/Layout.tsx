@@ -231,7 +231,7 @@ export default function Layout(props: { children?: JSX.Element }) {
               <Show when={sidebarExpanded()}>
                 <div class="flex-1 min-w-0">
                   <p class="text-[12px] text-white font-medium truncate">{session()?.name}</p>
-                  <span class="text-[9px] text-zinc-500 bg-[#1F1F23] px-1.5 py-0.5 rounded font-medium capitalize">{session()?.role}</span>
+                  <span class="text-[9px] text-zinc-500 bg-[#1F1F23] px-1.5 py-0.5 rounded font-medium capitalize">{session()?.roles?.[0]}</span>
                 </div>
                 <button
                   onClick={handleLogout}

@@ -8,6 +8,7 @@
     "start:prod": "npx tsx src/index.ts",
     "seed:run": "npx tsx --env-file=../.env src/seed/seed.ts",
     "clear": "npx tsx --env-file=../.env src/seed/clear.ts",
+    "seed:token": "npx tsx --env-file=../.env src/seed/token-seed.ts",
     "db:push": "drizzle-kit push --config ./drizzle.config.ts --force",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

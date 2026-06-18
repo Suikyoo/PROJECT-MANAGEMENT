@@ -646,7 +646,11 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
                   <div class="flex-1 min-w-0">
                     <div class="font-medium text-sm text-zinc-200">{user.name}</div>
                     <div class="text-[10px] font-mono text-zinc-500">@{user.email}</div>
-                    <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full mt-1 ${roleColors[user.role] || 'bg-zinc-800 text-zinc-400'}`}>{user.role}</span>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                      <For each={user.roles}>{(role) => (
+                        <span class={`inline-block text-[9px] font-medium px-2 py-0.5 rounded-full ${roleColors[role] || 'bg-zinc-800 text-zinc-400'}`}>{role}</span>
+                      )}</For>
+                    </div>
                     <div class="text-[10px] font-mono text-zinc-600 mt-1">{userTasks.length} tasks</div>
                   </div>
                 </div>

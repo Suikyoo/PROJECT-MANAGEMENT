@@ -93,7 +93,6 @@ export const issueTable = pgTable('issues', {
   description: text('description').notNull().default(''),
   proof: text('proof'), // Jam link
   priority: text("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
-  resolutionId: integer("resolution_id").references(() => resolutionTable.id),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 
@@ -105,6 +104,7 @@ export const issueTransactionTable = pgTable('issue_transactions', {
   tokenId: uuid('token_id').references(() => tokenTable.id),                       // client token (if applicable)
   authorName: text("author_name"),                                                  // display name for the stamper
   action: text("action", { enum: ["open", "testing", "closed", "rejected"] }).notNull(),
+  message: text("message"),                                                          // optional message/note attached to the action
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 
@@ -116,6 +116,7 @@ export const resolutionTransactionTable = pgTable('resolution_transactions', {
   tokenId: uuid('token_id').references(() => tokenTable.id),                       // client token who stamped
   authorName: text("author_name"),                                                  // display name for the stamper
   action: text("action", { enum: ["to-review", "revise", "resolved"] }).notNull(),
+  message: text("message"),                                                          // optional message/note attached to the action
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 

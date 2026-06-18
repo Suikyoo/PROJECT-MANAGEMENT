@@ -15,11 +15,33 @@ declare global {
   }
 }
 
-// Unified authentication: JWT cookie (insider) → client token (query/body) → 401
+// Unified authentication: client token (query/body) → JWT cookie (insider) → 401
+// Token path checked FIRST so explicit token_id overrides any lingering JWT cookie
 export const authenticate: RequestHandler = async (req, res, next) => {
-  const authHead: string | undefined = req.cookies.taskCookie;
+  // ── Path 1: Client token (query param or body) ──
+  const tokenId = (req.query.token_id as string) || (req.body?.token_id as string);
+  if (tokenId) {
+    const valid = await isValidToken(tokenId);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    const t = await getTokenById(tokenId);
+    res.locals.userId = -1;
+    res.locals.roles = ["Client"];
+    res.locals.email = "";
+    res.locals.username = t?.name || "Client";
+    res.locals.tokenId = tokenId;
+    // Pre-load allowed projects for access gating
+    try {
+      res.locals.allowedProjectIds = (await getAllowedProjectsByTokenId(tokenId)).map(p => p.id);
+    } catch {
+      res.locals.allowedProjectIds = [];
+    }
+    return next();
+  }
 
-  // ── Path 1: JWT cookie (insider users) ──
+  // ── Path 2: JWT cookie (insider users) ──
+  const authHead: string | undefined = req.cookies.taskCookie;
   if (authHead) {
     const [_, token] = authHead.split(" ");
     try {
@@ -43,28 +65,6 @@ export const authenticate: RequestHandler = async (req, res, next) => {
     } catch {
       return res.status(401).json({ error: "Invalid or expired session" });
     }
-  }
-
-  // ── Path 2: Client token (query param or body) ──
-  const tokenId = (req.query.token_id as string) || (req.body?.token_id as string);
-  if (tokenId) {
-    const valid = await isValidToken(tokenId);
-    if (!valid) {
-      return res.status(401).json({ error: "Invalid or expired token" });
-    }
-    const t = await getTokenById(tokenId);
-    res.locals.userId = -1;
-    res.locals.roles = ["Client"];
-    res.locals.email = "";
-    res.locals.username = t?.name || "Client";
-    res.locals.tokenId = tokenId;
-    // Pre-load allowed projects for access gating
-    try {
-      res.locals.allowedProjectIds = (await getAllowedProjectsByTokenId(tokenId)).map(p => p.id);
-    } catch {
-      res.locals.allowedProjectIds = [];
-    }
-    return next();
   }
 
   return res.status(401).json({ error: "Authentication required" });

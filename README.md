@@ -120,6 +120,9 @@ All seeded users share the password: **`password123`**
 | Alex Chen               | alex@gmail.com       | Developer    |
 | Diana Osei              | diana@gmail.com      | Developer    |
 
+token:id seed
+`aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`
+
 **Admin panel**: login with the credentials set in your `.env` (`ADMIN_USERNAME` / `ADMIN_PASSWORD`).
 
 ---

@@ -3,8 +3,8 @@ import { For, Show, createSignal, createResource } from 'solid-js';
 import { useParams } from '@solidjs/router';
 import { A } from '@solidjs/router';
 import {
-  getUserById, getUserRoles, addUserRole, removeUserRole, setUserRole,
-  type User, type Role,
+  getUserById, addUserRole, removeUserRole,
+  type User,
 } from '../lib/fetch';
 import { Zap, ArrowLeft, Plus, X } from 'lucide-solid';
 
@@ -27,43 +27,23 @@ export default function AdminUserView() {
     () => userId(),
     (id) => getUserById(id)
   );
-  const [additionalRoles, { refetch: refetchRoles }] = createResource(
-    () => userId(),
-    (id) => getUserRoles(id)
-  );
 
   const [error, setError] = createSignal('');
   const [message, setMessage] = createSignal('');
 
-  // All roles for this user (primary + additional), unique
-  const allRoles = () => {
-    const u = user();
-    if (!u) return [];
-    const set = new Set<string>([u.role, ...(additionalRoles() || [])]);
-    return [...set];
-  };
+  // All roles come from the flat roles array (API no longer has a separate primary role)
+  const roles = () => user()?.roles ?? [];
 
   // Roles available to add (not already assigned)
   const availableRoles = () => {
-    const assigned = allRoles();
+    const assigned = roles();
     return ALL_ROLES.filter(r => !assigned.includes(r.value));
-  };
-
-  const handleSetPrimaryRole = async (role: string) => {
-    try {
-      await setUserRole(userId(), role as Role);
-      setMessage(`Primary role changed to ${role}`);
-      setTimeout(() => setMessage(''), 2000);
-      refetchUser();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to change role');
-    }
   };
 
   const handleAddRole = async (role: string) => {
     try {
       await addUserRole(userId(), role);
-      refetchRoles();
+      refetchUser();
       setMessage(`Added ${role} role`);
       setTimeout(() => setMessage(''), 2000);
     } catch (err: unknown) {
@@ -74,7 +54,7 @@ export default function AdminUserView() {
   const handleRemoveRole = async (role: string) => {
     try {
       await removeUserRole(userId(), role);
-      refetchRoles();
+      refetchUser();
       setMessage(`Removed ${role} role`);
       setTimeout(() => setMessage(''), 2000);
     } catch (err: unknown) {
@@ -145,51 +125,22 @@ export default function AdminUserView() {
             </div>
           </div>
 
-          {/* Primary Role */}
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden mb-6">
-            <div class="px-5 py-3 border-b border-[#1F1F23]">
-              <span class="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Primary Role</span>
-            </div>
-            <div class="p-5">
-              <p class="text-xs text-zinc-400 mb-3">
-                The primary role determines the user's default access level. Additional roles can be added below.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <For each={ALL_ROLES}>
-                  {(r) => {
-                    const isPrimary = user()!.role === r.value;
-                    return (
-                      <button
-                        onClick={() => !isPrimary && handleSetPrimaryRole(r.value)}
-                        disabled={isPrimary}
-                        class={`px-3 py-1.5 rounded text-xs font-medium border transition-all cursor-pointer ${
-                          isPrimary
-                            ? `${r.bg} ${r.text} border-current/30`
-                            : 'bg-transparent border-[#3F3F46] text-zinc-500 hover:text-white hover:border-zinc-500'
-                        } disabled:cursor-default`}
-                      >
-                        {r.label}
-                        {isPrimary && ' (current)'}
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Roles */}
+          {/* Roles */}
           <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden mb-6">
             <div class="px-5 py-3 border-b border-[#1F1F23] flex items-center justify-between">
-              <span class="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Additional Roles</span>
-              <span class="text-[10px] text-zinc-600">{allRoles().length} role(s) assigned</span>
+              <span class="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Roles</span>
+              <span class="text-[10px] text-zinc-600">{roles().length} role(s) assigned</span>
             </div>
             <div class="p-5">
-              <Show when={additionalRoles() && additionalRoles()!.length > 0} fallback={
-                <p class="text-xs text-zinc-500 italic">No additional roles assigned.</p>
+              <p class="text-xs text-zinc-400 mb-4">
+                Assigned roles for this user. Click the <span class="text-zinc-300">×</span> button to remove a role.
+              </p>
+
+              <Show when={roles().length > 0} fallback={
+                <p class="text-xs text-zinc-500 italic mb-4">No roles assigned.</p>
               }>
                 <div class="flex flex-wrap gap-2 mb-4">
-                  <For each={additionalRoles() || []}>
+                  <For each={roles()}>
                     {(role) => {
                       const style = getRoleStyle(role);
                       return (
@@ -209,7 +160,7 @@ export default function AdminUserView() {
                 </div>
               </Show>
 
-              {/* Add role dropdown */}
+              {/* Add role */}
               <Show when={availableRoles().length > 0}>
                 <div class="flex items-center gap-2">
                   <span class="text-xs text-zinc-500">Add role:</span>
@@ -217,7 +168,7 @@ export default function AdminUserView() {
                     {(r) => (
                       <button
                         onClick={() => handleAddRole(r.value)}
-                        class={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium border border-[#3F3F46] bg-transparent text-zinc-400 hover:text-white hover:border-zinc-500 cursor-pointer transition-colors`}
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium border border-[#3F3F46] bg-transparent text-zinc-400 hover:text-white hover:border-zinc-500 cursor-pointer transition-colors"
                       >
                         <Plus size={10} />
                         {r.label}
@@ -226,30 +177,6 @@ export default function AdminUserView() {
                   </For>
                 </div>
               </Show>
-            </div>
-          </div>
-
-          {/* All Roles Summary */}
-          <div class="bg-[#121214] border border-[#1F1F23] rounded-lg overflow-hidden">
-            <div class="px-5 py-3 border-b border-[#1F1F23]">
-              <span class="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Effective Roles</span>
-            </div>
-            <div class="p-5">
-              <p class="text-xs text-zinc-400 mb-3">
-                These are all roles this user has, combining primary and additional roles.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <For each={allRoles()}>
-                  {(role) => {
-                    const style = getRoleStyle(role);
-                    return (
-                      <span class={`px-3 py-1.5 rounded text-xs font-medium ${style.bg} ${style.text}`}>
-                        {role}
-                      </span>
-                    );
-                  }}
-                </For>
-              </div>
             </div>
           </div>
         </Show>

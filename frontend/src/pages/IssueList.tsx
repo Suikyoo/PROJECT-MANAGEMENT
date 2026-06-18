@@ -26,7 +26,7 @@ export default function IssueList() {
     try {
       const result = await getIssuesByProject(projectId(), params.token_id);
       // sort the issues with unresolved issues at the top(beginning)
-      setIssues(result.toSorted(issue => issue.resolutionId || -1));
+      setIssues(result.toSorted(issue => issue.resolved ? 1 : -1));
     } catch (e) { /* ignore */ }
     setLoading(false);
   };
@@ -107,7 +107,7 @@ export default function IssueList() {
               <div class="flex items-center gap-2">
                 <span class="text-[13px] font-medium text-white">{issue.title}</span>
                 <span class={`text-[10px] px-1.5 py-0.5 rounded ${priorityColor(issue.priority)}`}>{issue.priority}</span>
-                {issue.resolutionId && <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">Resolved</span>}
+                {issue.resolved && <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">Resolved</span>}
               </div>
               {issue.description && (
                 <p class="text-[11px] text-zinc-500 mt-1 line-clamp-1">{issue.description}</p>

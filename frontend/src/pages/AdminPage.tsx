@@ -2,10 +2,10 @@
 import { For, Show, createSignal, createResource } from 'solid-js';
 import { A } from '@solidjs/router';
 import {
-  getUsers, getPendingUsers, approveUser, rejectUser, setUserRole, deleteUser, logout,
+  getUsers, getPendingUsers, approveUser, rejectUser, deleteUser, logout,
   getTokens, createToken, deleteToken, getTokenAccess, createTokenAccess, deleteTokenAccess,
   getProjects,
-  type User, type Role, type Token, type Project, type Access,
+  type User, type Token, type Project, type Access,
 } from '../lib/fetch';
 import { Zap } from 'lucide-solid';
 
@@ -39,11 +39,6 @@ export default function AdminPage() {
 
   const handleReject = async (userId: number) => {
     try { await rejectUser(userId); refetchUsers(); refetchPending(); }
-    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed'); }
-  };
-
-  const handleRoleChange = async (userId: number, role: Role) => {
-    try { await setUserRole(userId, role); refetchUsers(); refetchPending(); }
     catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed'); }
   };
 
@@ -100,8 +95,17 @@ export default function AdminPage() {
     }
   };
 
-  const roles: Role[] = ['Supervisor', 'QA', 'Developer'];
   const displayedUsers = () => tab() === 'pending' ? pendingUsers() || [] : users() || [];
+
+  const roleBadge = (role: string) => {
+    const map: Record<string, string> = {
+      Supervisor: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
+      QA: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+      Developer: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
+      Client: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/20',
+    };
+    return map[role] || 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20';
+  };
 
   const formatExpiry = (ms: number) => {
     const days = ms / (24 * 60 * 60 * 1000);
@@ -154,7 +158,7 @@ export default function AdminPage() {
                 <tr class="border-b border-[#1F1F23] text-zinc-600 text-[11px] uppercase tracking-wider">
                   <th class="p-3 font-semibold">Name</th>
                   <th class="p-3 font-semibold">Username</th>
-                  <th class="p-3 font-semibold">Role</th>
+                  <th class="p-3 font-semibold">Roles</th>
                   <th class="p-3 font-semibold">Status</th>
                   <th class="p-3 font-semibold">Actions</th>
                 </tr>
@@ -169,13 +173,15 @@ export default function AdminPage() {
                       <A href={`/admin/user/${user.id}`} class="text-zinc-500 hover:text-white transition-colors no-underline">{user.email}</A>
                     </td>
                     <td class="p-3">
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.currentTarget.value as Role)}
-                        class="bg-[#0B0B0C] border border-[#3F3F46] text-white text-xs p-1.5 rounded focus:outline-none focus:border-zinc-500 cursor-pointer"
-                      >
-                        <For each={roles}>{(r) => <option value={r}>{r}</option>}</For>
-                      </select>
+                      <div class="flex flex-wrap gap-1">
+                        <Show when={user.roles && user.roles.length > 0} fallback={
+                          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-zinc-500/15 text-zinc-400 border border-zinc-500/20">None</span>
+                        }>
+                          <For each={user.roles}>{(r) => (
+                            <span class={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${roleBadge(r)}`}>{r}</span>
+                          )}</For>
+                        </Show>
+                      </div>
                     </td>
                     <td class="p-3">
                       <span class={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
@@ -220,7 +226,7 @@ export default function AdminPage() {
                 <For each={tokens() || []}>{(token) => (
                   <tr class="text-zinc-300 hover:bg-[#121214] transition-colors">
                     <td class="p-3 font-medium text-white">{token.name}</td>
-                    <td class="p-3 text-zinc-500 text-[10px]">/client/{token.id}</td>
+                    <td class="p-3 text-zinc-500 text-[10px]">{window.location.origin}/client/{token.id}</td>
                     <td class="p-3 text-zinc-500">{new Date(token.dateIssued).toLocaleDateString()}</td>
                     <td class="p-3 text-zinc-500">{formatExpiry(token.expiry)}</td>
                     <td class="p-3">
@@ -262,7 +268,7 @@ export default function AdminPage() {
           <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowTokenAccess(false)}>
             <div class="bg-[#121214] border border-[#1F1F23] p-6 rounded-lg w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
               <h3 class="text-lg font-semibold text-white mb-2">Edit Access: {selectedTokenName()}</h3>
-              <p class="text-xs text-zinc-500 mb-4">Link: /client/{selectedTokenId()}</p>
+              <p class="text-xs text-zinc-500 mb-4">Link: {window.location.origin}/client/{selectedTokenId()}</p>
 
               <h4 class="text-xs font-semibold uppercase text-zinc-400 tracking-wider mb-2">Allowed Projects</h4>
               <div class="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto">

@@ -53,7 +53,7 @@ export default function App(props: { children?: JSX.Element }) {
         <div class="bg-[#1A1A1E] p-3 rounded-lg border border-[#27272A]">
           <p class="text-[11px] text-zinc-500 mb-1 font-semibold tracking-wider uppercase">Signed in as</p>
           <p class="text-xs text-white font-medium">{session()?.name ?? 'Guest'}</p>
-          <p class="text-[10px] text-zinc-500">{session()?.role ?? 'Not logged in'}</p>
+          <p class="text-[10px] text-zinc-500">{session()?.roles?.[0] ?? 'Not logged in'}</p>
         </div>
       </aside>
 
