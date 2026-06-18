@@ -8,15 +8,16 @@ import {
   getProjectCommentsByProjectId, getPhaseCommentsByPhaseId,
   getTasksByProjectId,
   getProjectLog, getPhaseLog,
-  getAllTokens, getAllowedProjectsByTokenId, getAccessByTokenId,
-  getTagsByTaskId, getTagsByProjectId, getTokenById,
+  getAllTokens, getAccessByTokenId,
+  getTagsByTaskId, getTagsByProjectId,
   getProjectUsers, getValidOtpSession, getValidForgetSession,
   getIssuesByProjectId, getIssueById, getIssueCommentsByIssueId,
   getIssueTagsByIssueId, getTagTypes, getResolutionByIssueId,
+  getIssueTransactionsByIssueId, getResolutionTransactionsByResolutionId,
   getRolesByUserId,
 } from "./lib/db/getter.ts"
 import { 
-  createUser, approveUser, setUserRole, deleteUser,
+  createUser, approveUser, deleteUser,
   createProject, createPhase,
   createTask, acceptTask, submitTask, approveTask,
   createProjectComment, createPhaseComment, createProjectLog, createPhaseLog,
@@ -25,11 +26,12 @@ import {
   createForgetSession, consumeForgetSession, setUserPassword,
   createIssue, createIssueComment, createIssueTag, deleteIssueTag,
   createTagType, createResolution,
+  createIssueTransaction, createResolutionTransaction,
   addUserRole, removeUserRole,
 } from "./lib/db/setter.ts"
 import { dumpAllTables, dumpTable } from "./lib/db/backup.ts"
 import { authenticateAdmin, authenticateUser } from "./lib/auth/index.ts";
-import { authorize, requireRole, validate } from "./lib/auth/middleware.ts";
+import { authenticate, requireRole, requireInsider, requireToken, restrictProject } from "./lib/auth/middleware.ts";
 import { generateOTP, sendOTP, sendForgetUserEmail } from "./lib/auth/otp.ts";
 import cookieParser from "cookie-parser";
 import multer from "multer";
@@ -38,7 +40,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import bcrypt from "bcryptjs";
-import { googleClientId } from "./lib/env/index.ts";
+import { disableOTP, googleClientId } from "./lib/env/index.ts";
 
 const SALT_ROUNDS = 10;
 
@@ -167,8 +169,10 @@ export function configRoutes(app: Express) {
       return res.status(403).json({ error: "Account not yet approved by admin" });
     }
     const otp = generateOTP();
-    await createOtpSession(user.email, otp, new Date(Date.now() + 10 * 60 * 1000));
-    await sendOTP(user.email, otp);
+    if (!disableOTP) {
+      await createOtpSession(user.email, otp, new Date(Date.now() + 10 * 60 * 1000));
+      await sendOTP(user.email, otp);
+    }
     return res.json({ ok: true, otpRequired: true, email: user.email });
   });
 
@@ -192,8 +196,10 @@ export function configRoutes(app: Express) {
     // Generate OTP and send via email
     // TEMPORARY: AI PLEASE NOTICE THIS IF I DONT
     const otp = generateOTP();
-    await createOtpSession(user.email, otp, new Date(Date.now() + 10 * 60 * 1000));
-    await sendOTP(user.email, otp);
+    if (!disableOTP) {
+      await createOtpSession(user.email, otp, new Date(Date.now() + 10 * 60 * 1000));
+      await sendOTP(user.email, otp);
+    }
     return res.json({ ok: true, otpRequired: true });
   });
 
@@ -225,20 +231,22 @@ export function configRoutes(app: Express) {
     }
     //I disabled OTP for ease of development
     //PLEASE AI PLEASE SEE THIS if I somehow forget it
-    const session = await getValidOtpSession(user.email, otp);
-    if (!session) {
-      return res.status(401).json({ error: "Invalid or expired OTP" });
+    if (!disableOTP) {
+      const session = await getValidOtpSession(user.email, otp);
+      if (!session) {
+        return res.status(401).json({ error: "Invalid or expired OTP" });
+      }
+      await consumeOtpSession(session.id);
     }
-    await consumeOtpSession(session.id);
+
     const roles = await getRolesByUserId(user.id);
-    const allRoles = [user.role, ...roles];
-    const token = await authenticateUser(user.id, allRoles, user.email, user.name);
+    const token = await authenticateUser(user.id, roles, user.email, user.name);
     res.cookie("taskCookie", `Bearer ${token}`, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 4 * 60 * 60 * 1000, // 4 hours
     });
-    return res.json({ ok: true, role: user.role, roles: allRoles, userId: user.id, name: user.name, email: user.email });
+    return res.json({ ok: true, role: roles[0] || 'Developer', roles, userId: user.id, name: user.name, email: user.email });
   });
 
   // Forget password — request reset link
@@ -285,12 +293,12 @@ export function configRoutes(app: Express) {
   });
 
   // Check current session
-  app.get("/auth/me", authorize, async (_req, res) => {
+  app.get("/auth/me", authenticate, requireInsider, async (_req, res) => {
     const users = await getUserById(res.locals.userId);
     if (!users.length) return res.status(404).json({ error: "User not found" });
     const u = users[0];
     const roles = await getRolesByUserId(u.id);
-    return res.json({ userId: u.id, email: u.email, name: u.name, role: u.role, roles });
+    return res.json({ userId: u.id, email: u.email, name: u.name, role: roles[0] || 'Developer', roles });
   });
 
   // ---- Public read routes (for client page - no auth needed) ----
@@ -314,19 +322,19 @@ export function configRoutes(app: Express) {
     return res.json(await getPhasesById(id));
   });
 
-  app.get("/projects/:id/comments", authorize, async (req, res) => {
+  app.get("/projects/:id/comments", authenticate, requireInsider, async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await getProjectCommentsByProjectId(id));
   });
 
-  app.get("/phases/:id/comments", authorize, async (req, res) => {
+  app.get("/phases/:id/comments", authenticate, requireInsider, async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await getPhaseCommentsByPhaseId(id));
   });
 
   // ---- Protected routes (require login) ----
 
-  app.post("/projects/:id/comments", authorize, async (req, res) => {
+  app.post("/projects/:id/comments", authenticate, requireInsider, async (req, res) => {
     const projectId = Number(req.params.id);
     const { content } = req.body as { content?: string };
     if (!content) return res.status(400).json({ error: "content required" });
@@ -334,7 +342,7 @@ export function configRoutes(app: Express) {
     return res.json(comment);
   });
 
-  app.post("/phases/:id/comments", authorize, async (req, res) => {
+  app.post("/phases/:id/comments", authenticate, requireInsider, async (req, res) => {
     const phaseId = Number(req.params.id);
     const { content } = req.body as { content?: string };
     if (!content) return res.status(400).json({ error: "content required" });
@@ -344,92 +352,127 @@ export function configRoutes(app: Express) {
 
   // ---- User routes ----
 
-  app.get("/users", authorize, async (_, res) => {
-    return res.json(await getUsers());
+  app.get("/users/:id", authenticate, requireInsider, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "invalid user id" });
+    const users = await getUserById(id);
+    if (!users.length) return res.status(404).json({ error: "User not found" });
+    const u = users[0];
+    const roles = await getRolesByUserId(id);
+    return res.json({ id: u.id, name: u.name, email: u.email, role: roles[0] || 'Developer', roles });
+  });
+
+  app.get("/users", authenticate, requireInsider, async (_, res) => {
+    const users = await getUsers();
+    // Attach roles to each user
+    const enriched = await Promise.all(users.map(async (u) => {
+      const roles = await getRolesByUserId(u.id);
+      return { id: u.id, name: u.name, email: u.email, approved: u.approved, role: roles[0] || 'Developer', roles };
+    }));
+    return res.json(enriched);
   });
 
   // ---- Admin-only routes ----
 
-  app.get("/admin/users/pending", authorize, requireRole("Admin"), async (_, res) => {
-    return res.json(await getPendingUsers());
+  app.get("/admin/users/pending", authenticate, requireRole("Admin"), async (_, res) => {
+    const users = await getPendingUsers();
+    const enriched = await Promise.all(users.map(async (u) => {
+      const roles = await getRolesByUserId(u.id);
+      return { id: u.id, name: u.name, email: u.email, approved: u.approved, role: roles[0] || 'Developer', roles };
+    }));
+    return res.json(enriched);
   });
 
-  app.get("/admin/users", authorize, requireRole("Admin"), async (_, res) => {
-    return res.json(await getUsers());
+  app.get("/admin/users", authenticate, requireRole("Admin"), async (_, res) => {
+    const users = await getUsers();
+    const enriched = await Promise.all(users.map(async (u) => {
+      const roles = await getRolesByUserId(u.id);
+      return { id: u.id, name: u.name, email: u.email, approved: u.approved, role: roles[0] || 'Developer', roles };
+    }));
+    return res.json(enriched);
   });
 
-  app.post("/admin/users/:id/approve", authorize, requireRole("Admin"), async (req, res) => {
+  app.get("/admin/users/:id", authenticate, requireRole("Admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const users = await getUserById(id);
+    if (!users.length) return res.status(404).json({ error: "User not found" });
+    const u = users[0];
+    const roles = await getRolesByUserId(id);
+    return res.json({ id: u.id, name: u.name, email: u.email, approved: u.approved, role: roles[0] || 'Developer', roles });
+  });
+
+  app.post("/admin/users/:id/approve", authenticate, requireRole("Admin"), async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await approveUser(id, "approved"));
   });
 
-  app.post("/admin/users/:id/reject", authorize, requireRole("Admin"), async (req, res) => {
+  app.post("/admin/users/:id/reject", authenticate, requireRole("Admin"), async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await approveUser(id, "rejected"));
   });
 
-  app.post("/admin/users/:id/role", authorize, requireRole("Admin"), async (req, res) => {
-    const id = Number(req.params.id);
-    const { role } = req.body as { role?: string };
-    if (!role) return res.status(400).json({ error: "role required" });
-    return res.json(await setUserRole(id, role as Parameters<typeof setUserRole>[1]));
-  });
-
-  // Manage additional user roles
-  app.get("/admin/users/:id/roles", authorize, requireRole("Admin"), async (req, res) => {
-    const id = Number(req.params.id);
-    return res.json(await getRolesByUserId(id));
-  });
-
-  app.post("/admin/users/:id/roles", authorize, requireRole("Admin"), async (req, res) => {
+  app.post("/admin/users/:id/role", authenticate, requireRole("Admin"), async (req, res) => {
     const id = Number(req.params.id);
     const { role } = req.body as { role?: string };
     if (!role) return res.status(400).json({ error: "role required" });
     return res.json(await addUserRole(id, role));
   });
 
-  app.delete("/admin/users/:id/roles/:role", authorize, requireRole("Admin"), async (req, res) => {
+  // Manage additional user roles
+  app.get("/admin/users/:id/roles", authenticate, requireRole("Admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await getRolesByUserId(id));
+  });
+
+  app.post("/admin/users/:id/roles", authenticate, requireRole("Admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const { role } = req.body as { role?: string };
+    if (!role) return res.status(400).json({ error: "role required" });
+    return res.json(await addUserRole(id, role));
+  });
+
+  app.delete("/admin/users/:id/roles/:role", authenticate, requireRole("Admin"), async (req, res) => {
     const id = Number(req.params.id);
     const { role } = req.params as { role: string };
     await removeUserRole(id, role);
     return res.json({ ok: true });
   });
 
-  app.delete("/admin/users/:id", authorize, requireRole("Admin"), async (req, res) => {
+  app.delete("/admin/users/:id", authenticate, requireRole("Admin"), async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await deleteUser(id));
   });
 
   // ---- Admin token management ----
 
-  app.get("/admin/tokens", authorize, requireRole("Admin"), async (_, res) => {
+  app.get("/admin/tokens", authenticate, requireRole("Admin"), async (_, res) => {
     return res.json(await getAllTokens());
   });
 
-  app.post("/admin/tokens", authorize, requireRole("Admin"), async (req, res) => {
+  app.post("/admin/tokens", authenticate, requireRole("Admin"), async (req, res) => {
     const { name, expiry } = req.body as { name?: string; expiry?: number };
     if (!name || !expiry) return res.status(400).json({ error: "name and expiry required" });
     return res.json(await createToken(name, expiry));
   });
 
-  app.delete("/admin/tokens/:id", authorize, requireRole("Admin"), async (req, res) => {
+  app.delete("/admin/tokens/:id", authenticate, requireRole("Admin"), async (req, res) => {
     const id = req.params.id as string;
     return res.json(await deleteToken(id));
   });
 
-  app.get("/admin/tokens/:id/access", authorize, requireRole("Admin"), async (req, res) => {
+  app.get("/admin/tokens/:id/access", authenticate, requireRole("Admin"), async (req, res) => {
     const id = req.params.id as string;
     return res.json(await getAccessByTokenId(id));
   });
 
-  app.post("/admin/tokens/:id/access", authorize, requireRole("Admin"), async (req, res) => {
+  app.post("/admin/tokens/:id/access", authenticate, requireRole("Admin"), async (req, res) => {
     const tokenId = req.params.id as string;
     const { projectId } = req.body as { projectId?: number };
     if (!projectId) return res.status(400).json({ error: "projectId required" });
     return res.json(await createAccess(tokenId, projectId));
   });
 
-  app.delete("/admin/tokens/:id/access/:projectId", authorize, requireRole("Admin"), async (req, res) => {
+  app.delete("/admin/tokens/:id/access/:projectId", authenticate, requireRole("Admin"), async (req, res) => {
     const tokenId = req.params.id as string;
     const projectId = Number(req.params.projectId);
     return res.json(await deleteAccess(tokenId, projectId));
@@ -437,7 +480,7 @@ export function configRoutes(app: Express) {
 
   // ---- Admin backup ----
 
-  app.get("/admin/backup", authorize, requireRole("Admin"), async (req, res) => {
+  app.get("/admin/backup", authenticate, requireRole("Admin"), async (req, res) => {
     const table = req.query.table as string | undefined;
     try {
       if (table) {
@@ -459,20 +502,20 @@ export function configRoutes(app: Express) {
 
   // ---- Supervisor routes ----
 
-  app.post("/projects", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/projects", authenticate, requireRole("Supervisor"), async (req, res) => {
     const { name, description } = req.body as { name?: string; description?: string };
     if (!name) return res.status(400).json({ error: "name required" });
     return res.json(await createProject(name, description || ""));
   });
 
-  app.post("/projects/:id/phases", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/projects/:id/phases", authenticate, requireRole("Supervisor"), async (req, res) => {
     const projectId = Number(req.params.id);
     const { name } = req.body as { name?: string };
     if (!name) return res.status(400).json({ error: "name required" });
     return res.json(await createPhase(projectId, name));
   });
 
-  app.post("/phases/:id/tasks", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/phases/:id/tasks", authenticate, requireRole("Supervisor"), async (req, res) => {
     const phaseId = Number(req.params.id);
     const { title, description, priority, start, end } = req.body as { title?: string; description?: string; priority?: "low" | "medium" | "high" | "critical"; start?: string; end?: string };
     if (!title) return res.status(400).json({ error: "title required" });
@@ -490,31 +533,38 @@ export function configRoutes(app: Express) {
   // ---- Task state transitions ----
   
   // Get tasks for a phase
-  app.get("/phases/:id/tasks", authorize, async (req, res) => {
+  app.get("/phases/:id/tasks", authenticate, async (req, res) => {
     const phaseId = Number(req.params.id);
+    // Token users: verify phase belongs to allowed project
+    if (res.locals.userId === -1) {
+      const phases = await getPhasesById(phaseId);
+      if (!phases.length || !res.locals.allowedProjectIds?.includes(phases[0].projectId)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+    }
     return res.json(await getTaskByPhaseId(phaseId));
   });
 
   // Get all tasks for a project (across all phases)
-  app.get("/projects/:id/tasks", authorize, async (req, res) => {
+  app.get("/projects/:id/tasks", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     return res.json(await getTasksByProjectId(projectId));
   });
 
   // Developer: accept backlog task -> in-progress
-  app.post("/tasks/:id/accept", authorize, requireRole("Developer"), async (req, res) => {
+  app.post("/tasks/:id/accept", authenticate, requireRole("Developer"), async (req, res) => {
     const taskId = Number(req.params.id);
     return res.json(await acceptTask(taskId, res.locals.userId));
   });
 
   // Developer: submit task -> to review
-  app.post("/tasks/:id/submit", authorize, requireRole("Developer"), async (req, res) => {
+  app.post("/tasks/:id/submit", authenticate, requireRole("Developer"), async (req, res) => {
     const taskId = Number(req.params.id);
     return res.json(await submitTask(taskId));
   });
 
   // QA: approve task -> QA approved
-  app.post("/tasks/:id/approve", authorize, requireRole("QA"), async (req, res) => {
+  app.post("/tasks/:id/approve", authenticate, requireRole("QA"), async (req, res) => {
     const taskId = Number(req.params.id);
     return res.json(await approveTask(taskId));
   });
@@ -522,24 +572,33 @@ export function configRoutes(app: Express) {
   // ---- Tags ----
 
   // Get tags for a task
-  app.get("/tasks/:id/tags", authorize, async (req, res) => {
+  app.get("/tasks/:id/tags", authenticate, async (req, res) => {
     const taskId = Number(req.params.id);
+    // Token users: verify task belongs to allowed project
+    if (res.locals.userId === -1) {
+      const tasks = await getTaskById(taskId);
+      if (!tasks.length) return res.status(404).json({ error: "Task not found" });
+      const phases = await getPhasesById(tasks[0].phaseId);
+      if (!phases.length || !res.locals.allowedProjectIds?.includes(phases[0].projectId)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+    }
     return res.json(await getTagsByTaskId(taskId));
   });
 
   // Get all tags for a project (for autocomplete suggestions)
-  app.get("/projects/:id/tags", authorize, async (req, res) => {
+  app.get("/projects/:id/tags", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     return res.json(await getTagsByProjectId(projectId));
   });
 
-  app.get("/projects/:id/users", authorize, async (req, res) => {
+  app.get("/projects/:id/users", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     return res.json(await getProjectUsers(projectId));
   });
 
   // Add a tag to a task
-  app.post("/tasks/:id/tags", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/tasks/:id/tags", authenticate, requireRole("Supervisor"), async (req, res) => {
     const taskId = Number(req.params.id);
     const { name } = req.body as { name?: string };
     if (!name) return res.status(400).json({ error: "name required" });
@@ -547,14 +606,14 @@ export function configRoutes(app: Express) {
   });
 
   // Delete a tag
-  app.delete("/tags/:id", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.delete("/tags/:id", authenticate, requireRole("Supervisor"), async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await deleteTag(id));
   });
 
   // ---- Image upload ----
 
-  app.post("/images", authorize, imageUpload.single("image"), async (req, res) => {
+  app.post("/images", authenticate, requireInsider, imageUpload.single("image"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No image file provided" });
     }
@@ -563,13 +622,13 @@ export function configRoutes(app: Express) {
 
   // ---- Project Log ----
 
-  app.get("/projects/:id/log", authorize, async (req, res) => {
+  app.get("/projects/:id/log", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     const log = await getProjectLog(projectId);
     return res.json(log || { projectId, content: "" });
   });
 
-  app.post("/projects/:id/log", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/projects/:id/log", authenticate, requireRole("Supervisor"), async (req, res) => {
     const projectId = Number(req.params.id);
     const { content } = req.body as { content?: string };
     if (content === undefined) return res.status(400).json({ error: "content required" });
@@ -578,340 +637,143 @@ export function configRoutes(app: Express) {
 
   // ---- Phase Log ----
 
-  app.get("/phases/:id/log", authorize, async (req, res) => {
+  app.get("/phases/:id/log", authenticate, async (req, res) => {
     const phaseId = Number(req.params.id);
+    // Token users: verify phase belongs to allowed project
+    if (res.locals.userId === -1) {
+      const phases = await getPhasesById(phaseId);
+      if (!phases.length || !res.locals.allowedProjectIds?.includes(phases[0].projectId)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+    }
     const log = await getPhaseLog(phaseId);
     return res.json(log || { phaseId, content: "" });
   });
 
-  app.post("/phases/:id/log", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/phases/:id/log", authenticate, requireRole("Supervisor"), async (req, res) => {
     const phaseId = Number(req.params.id);
     const { content } = req.body as { content?: string };
     if (content === undefined) return res.status(400).json({ error: "content required" });
     return res.json(await createPhaseLog(phaseId, content));
   });
 
-  // ---- Client token routes (prefix /token/) ----
-  //most of these have post on them but they're actually inquirer functions
-  // Projects
-  app.get("/token/:token_id/projects", validate, async (_, res) => {
-    const tokenId = res.locals.tokenId!;
-    return res.json(await getAllowedProjectsByTokenId(tokenId));
-  });
-
-  app.get("/token/:token_id/projects/:id", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(allowed.filter(p => p.id === projectId));
-  });
-
-  app.get("/token/:token_id/projects/:id/phases", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getPhasesByProjectId(projectId));
-  });
-
-  app.get("/token/:token_id/phases/:id", validate, async (req, res) => {
-    const phaseId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const phases = await getPhasesById(phaseId);
-    if (!phases.length) return res.status(404).json({ error: "Phase not found" });
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    console.log("allowedProjects: ", allowed);
-    console.log("phase: ", phases);
-    if (!allowed.find(p => p.id === phases[0].projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(phases);
-  });
-
-  // Token feedback routes (commented out — clients now use issues instead of comments)
-  // app.get("/token/:token_id/phases/:id/feedbacks", validate, async (req, res) => {
-  //   const phaseId = Number(req.params.id);
-  //   const tokenId = res.locals.tokenId!;
-  //   const phases = await getPhasesById(phaseId);
-  //   if (!phases.length) return res.status(404).json({ error: "Phase not found" });
-  //   const allowed = await getAllowedProjectsByTokenId(tokenId);
-  //   if (!allowed.find(p => p.id === phases[0].projectId)) {
-  //     return res.status(403).json({ error: "Unauthorized" });
-  //   }
-  //   return res.json(await getPhaseFeedbacksByPhaseId(phaseId));
-  // })
-  //
-  // app.get("/token/:token_id/projects/:id/feedbacks", validate, async (req, res) => {
-  //   const projectId = Number(req.params.id);
-  //   const tokenId = res.locals.tokenId!;
-  //   const allowed = await getAllowedProjectsByTokenId(tokenId);
-  //   if (!allowed.find(p => p.id === projectId)) {
-  //     return res.status(403).json({ error: "Unauthorized" });
-  //   }
-  //   return res.json(await getProjectFeedbacksByProjectId(projectId));
-  // })
-  //
-  // app.post("/token/:token_id/phases/:id/feedbacks", validate, async (req, res) => {
-  //   const phaseId = Number(req.params.id);
-  //   const tokenId = res.locals.tokenId!;
-  //   const phases = await getPhasesById(phaseId);
-  //   if (!phases.length) return res.status(404).json({ error: "Phase not found" });
-  //   const allowed = await getAllowedProjectsByTokenId(tokenId);
-  //   if (!allowed.find(p => p.id === phases[0].projectId)) {
-  //     return res.status(403).json({ error: "Unauthorized" });
-  //   }
-  //   const { content } = req.body as { content?: string };
-  //   if (!content) return res.status(400).json({ error: "content required" });
-  //   const token = await getTokenById(tokenId);
-  //   const feedback = await createPhaseFeedback(phaseId, null, content, token?.name);
-  //   return res.json(feedback);
-  // });
-  //
-  // app.post("/token/:token_id/projects/:id/feedbacks", validate, async (req, res) => {
-  //   const projectId = Number(req.params.id);
-  //   const tokenId = res.locals.tokenId!;
-  //   const allowed = await getAllowedProjectsByTokenId(tokenId);
-  //   if (!allowed.find(p => p.id === projectId)) {
-  //     return res.status(403).json({ error: "Unauthorized" });
-  //   }
-  //   const { content } = req.body as { content?: string };
-  //   if (!content) return res.status(400).json({ error: "content required" });
-  //   const token = await getTokenById(tokenId);
-  //   const feedback = await createProjectFeedback(projectId, null, content, token?.name);
-  //   return res.json(feedback);
-  // });
-
-  app.get("/token/:token_id/projects/:id/log", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    const log = await getProjectLog(projectId);
-    return res.json(log || { projectId, content: "" });
-  });
-
-  app.get("/token/:token_id/phases/:id/log", validate, async (req, res) => {
-    const phaseId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const phases = await getPhasesById(phaseId);
-    if (!phases.length) return res.status(404).json({ error: "Phase not found" });
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === phases[0].projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    const log = await getPhaseLog(phaseId);
-    return res.json(log || { phaseId, content: "" });
-  });
-
-  app.get("/token/:token_id/projects/:id/tasks", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getTasksByProjectId(projectId));
-  });
-
-  app.get("/token/:token_id/phases/:id/tasks", validate, async (req, res) => {
-    const phaseId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const phases = await getPhasesById(phaseId);
-    if (!phases.length) return res.status(404).json({ error: "Phase not found" });
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === phases[0].projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getTaskByPhaseId(phaseId));
-  });
-
-  app.get("/token/:token_id/projects/:id/tags", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getTagsByProjectId(projectId));
-  });
-
-  app.get("/token/:token_id/projects/:id/users", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getProjectUsers(projectId));
-  });
-
-  app.get("/token/:token_id/tasks/:id/tags", validate, async (req, res) => {
-    const taskId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const tasks = await getTaskById(taskId);
-    if (!tasks.length) return res.status(404).json({ error: "Task not found" });
-    const phase = (await getPhasesById(tasks[0].phaseId))[0];
-    if (!phase) return res.status(404).json({ error: "Phase not found" });
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === phase.projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    return res.json(await getTagsByTaskId(taskId));
-  });
-
-  // ---- Issue routes (insider) ----
+  // ---- Issue routes (insider + client tokens) ----
   
-  app.get("/projects/:id/issues", authorize, async (req, res) => {
+  app.get("/projects/:id/issues", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     return res.json(await getIssuesByProjectId(projectId));
   });
 
-  app.post("/projects/:id/issues", authorize, async (req, res) => {
+  app.post("/projects/:id/issues", authenticate, restrictProject, async (req, res) => {
     const projectId = Number(req.params.id);
     const { title, description, proof, priority } = req.body as { title?: string; description?: string; proof?: string; priority?: string };
     if (!title) return res.status(400).json({ error: "title required" });
-    const issue = await createIssue(projectId, title, description || "", res.locals.userId, res.locals.username, proof, priority as any);
+    // Token users: userId = null, authorName = token.name; Insider: use real userId/username
+    const userId = res.locals.userId === -1 ? null : res.locals.userId;
+    const authorName = res.locals.userId === -1 ? res.locals.username : undefined;
+    const issue = await createIssue(projectId, title, description || "", userId, authorName, proof, priority as any);
     return res.json(issue);
   });
 
-  app.get("/issues/:id", authorize, async (req, res) => {
+  app.get("/issues/:id", authenticate, async (req, res) => {
     const id = Number(req.params.id);
     const issue = await getIssueById(id);
     if (!issue) return res.status(404).json({ error: "Issue not found" });
+    // Token users: verify issue belongs to allowed project
+    if (res.locals.userId === -1 && !res.locals.allowedProjectIds?.includes(issue.projectId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
     return res.json(issue);
   });
 
   // Issue comments
-  app.get("/issues/:id/comments", authorize, async (req, res) => {
+  app.get("/issues/:id/comments", authenticate, async (req, res) => {
     const issueId = Number(req.params.id);
     return res.json(await getIssueCommentsByIssueId(issueId));
   });
 
-  app.post("/issues/:id/comments", authorize, async (req, res) => {
+  app.post("/issues/:id/comments", authenticate, async (req, res) => {
     const issueId = Number(req.params.id);
     const { content } = req.body as { content?: string };
     if (!content) return res.status(400).json({ error: "content required" });
-    const comment = await createIssueComment(issueId, res.locals.userId, content, res.locals.username);
+    // Token users: userId = null, authorName = token.name; Insider: use real userId/username
+    const userId = res.locals.userId === -1 ? null : res.locals.userId;
+    const authorName = res.locals.username;
+    const comment = await createIssueComment(issueId, userId, content, authorName);
     return res.json(comment);
   });
 
   // Issue tags
-  app.get("/issues/:id/tags", authorize, async (req, res) => {
+  app.get("/issues/:id/tags", authenticate, async (req, res) => {
     const issueId = Number(req.params.id);
     return res.json(await getIssueTagsByIssueId(issueId));
   });
 
-  app.post("/issues/:id/tags", authorize, async (req, res) => {
+  app.post("/issues/:id/tags", authenticate, requireInsider, async (req, res) => {
     const issueId = Number(req.params.id);
     const { name, tagTypeId } = req.body as { name?: string; tagTypeId?: number };
     if (!name || !tagTypeId) return res.status(400).json({ error: "name and tagTypeId required" });
     return res.json(await createIssueTag(issueId, name, tagTypeId));
   });
 
-  app.delete("/issue-tags/:id", authorize, async (req, res) => {
+  app.delete("/issue-tags/:id", authenticate, requireInsider, async (req, res) => {
     const id = Number(req.params.id);
     return res.json(await deleteIssueTag(id));
   });
 
   // Tag types
-  app.get("/tag-types", authorize, async (_, res) => {
+  app.get("/tag-types", authenticate, async (_, res) => {
     return res.json(await getTagTypes());
   });
 
-  app.post("/tag-types", authorize, requireRole("Supervisor"), async (req, res) => {
+  app.post("/tag-types", authenticate, requireInsider, requireRole("Supervisor"), async (req, res) => {
     const { name } = req.body as { name?: string };
     if (!name) return res.status(400).json({ error: "name required" });
     return res.json(await createTagType(name));
   });
 
-  // Resolutions (Supervisor only)
-  app.post("/issues/:id/resolution", authorize, requireRole("Supervisor"), async (req, res) => {
+  // Resolutions (Supervisor only — insider only)
+  app.post("/issues/:id/resolution", authenticate, requireInsider, requireRole("Supervisor"), async (req, res) => {
     const issueId = Number(req.params.id);
     const { title, description, proof } = req.body as { title?: string; description?: string; proof?: string };
     if (!title) return res.status(400).json({ error: "title required" });
     return res.json(await createResolution(issueId, res.locals.userId, title, description || "", proof));
   });
 
-  app.get("/issues/:id/resolution", authorize, async (req, res) => {
+  app.get("/issues/:id/resolution", authenticate, async (req, res) => {
     const issueId = Number(req.params.id);
     const resolution = await getResolutionByIssueId(issueId);
     return res.json(resolution || null);
   });
 
-  // ---- Client token issue routes ----
-  
-  // Token: list project issues
-  app.get("/token/:token_id/projects/:id/issues", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
+  // ---- Issue transactions (insiders only stamp) ----
+  app.get("/issues/:id/transactions", authenticate, async (req, res) => {
+    const issueId = Number(req.params.id);
+    return res.json(await getIssueTransactionsByIssueId(issueId));
+  });
+
+  app.post("/issues/:id/transactions", authenticate, requireInsider, async (req, res) => {
+    const issueId = Number(req.params.id);
+    const { action } = req.body as { action?: string };
+    if (!action || !["open", "testing", "closed", "rejected"].includes(action)) {
+      return res.status(400).json({ error: "action must be open, testing, closed, or rejected" });
     }
-    return res.json(await getIssuesByProjectId(projectId));
+    return res.json(await createIssueTransaction(issueId, action as any, res.locals.userId, undefined, res.locals.username));
   });
 
-  // Token: get single issue (must belong to allowed project)
-  app.get("/token/:token_id/issues/:id", validate, async (req, res) => {
-    const issueId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const issue = await getIssueById(issueId);
-    if (!issue) return res.status(404).json({ error: "Issue not found" });
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === issue.projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
+  // ---- Resolution transactions (client tokens only stamp) ----
+  app.get("/resolutions/:id/transactions", authenticate, async (req, res) => {
+    const resolutionId = Number(req.params.id);
+    return res.json(await getResolutionTransactionsByResolutionId(resolutionId));
+  });
+
+  app.post("/resolutions/:id/transactions", authenticate, requireToken, async (req, res) => {
+    const resolutionId = Number(req.params.id);
+    const { action } = req.body as { action?: string };
+    if (!action || !["to-review", "revise", "resolved"].includes(action)) {
+      return res.status(400).json({ error: "action must be to-review, revise, or resolved" });
     }
-    return res.json(issue);
-  });
-
-  // Token: create issue
-  app.post("/token/:token_id/projects/:id/issues", validate, async (req, res) => {
-    const projectId = Number(req.params.id);
-    const tokenId = res.locals.tokenId!;
-    const allowed = await getAllowedProjectsByTokenId(tokenId);
-    if (!allowed.find(p => p.id === projectId)) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    const { title, description, proof, priority } = req.body as { title?: string; description?: string; proof?: string; priority?: string };
-    if (!title) return res.status(400).json({ error: "title required" });
-    const token = await getTokenById(tokenId);
-    return res.json(await createIssue(projectId, title, description || "", null, token?.name, proof, priority as any));
-  });
-
-  // Token: get issue comments
-  app.get("/token/:token_id/issues/:id/comments", validate, async (req, res) => {
-    const issueId = Number(req.params.id);
-    return res.json(await getIssueCommentsByIssueId(issueId));
-  });
-
-  // Token: create issue comment
-  app.post("/token/:token_id/issues/:id/comments", validate, async (req, res) => {
-    const issueId = Number(req.params.id);
-    const { content } = req.body as { content?: string };
-    if (!content) return res.status(400).json({ error: "content required" });
-    const token = await getTokenById(res.locals.tokenId!);
-    const comment = await createIssueComment(issueId, null, content, token?.name);
-    return res.json(comment);
-  });
-
-  // Token: get issue tags
-  app.get("/token/:token_id/issues/:id/tags", validate, async (req, res) => {
-    const issueId = Number(req.params.id);
-    return res.json(await getIssueTagsByIssueId(issueId));
-  });
-
-  // Token: get issue resolution
-  app.get("/token/:token_id/issues/:id/resolution", validate, async (req, res) => {
-    const issueId = Number(req.params.id);
-    const resolution = await getResolutionByIssueId(issueId);
-    return res.json(resolution || null);
+    return res.json(await createResolutionTransaction(resolutionId, action as any, res.locals.tokenId, undefined, res.locals.username));
   });
 
 }

@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "./index.ts";
-import { projectTable, phaseTable, userTable, userRoleTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable } from "./schema.ts";
-import type { TaskState, Role, ApprovalStatus } from "./enums.ts";
+import { projectTable, phaseTable, userTable, userRoleTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable, issueTransactionTable, resolutionTransactionTable } from "./schema.ts";
+import type { TaskState, ApprovalStatus } from "./enums.ts";
 
 // --- User setters ---
 
@@ -10,7 +10,6 @@ export async function createUser(name: string, email: string, passwordHash: stri
     name,
     email,
     passwordHash,
-    role: "Developer",
     approved: "pending",
   }).returning();
   return result[0];
@@ -19,13 +18,6 @@ export async function createUser(name: string, email: string, passwordHash: stri
 export async function approveUser(userId: number, approved: ApprovalStatus) {
   return await db.update(userTable)
     .set({ approved })
-    .where(eq(userTable.id, userId))
-    .returning();
-}
-
-export async function setUserRole(userId: number, role: Role) {
-  return await db.update(userTable)
-    .set({ role })
     .where(eq(userTable.id, userId))
     .returning();
 }
@@ -280,6 +272,28 @@ export async function deleteIssueTag(tagId: number) {
 
 export async function createTagType(name: string) {
   const result = await db.insert(tagTypeTable).values({ name }).returning();
+  return result[0];
+}
+
+export async function createIssueTransaction(issueId: number, action: "open" | "testing" | "closed" | "rejected", userId?: number | null, tokenId?: string, authorName?: string) {
+  const result = await db.insert(issueTransactionTable).values({
+    issueId,
+    action,
+    userId: userId ?? null,
+    tokenId: tokenId ?? null,
+    authorName: authorName ?? null,
+  }).returning();
+  return result[0];
+}
+
+export async function createResolutionTransaction(resolutionId: number, action: "to-review" | "revise" | "resolved", tokenId?: string, userId?: number | null, authorName?: string) {
+  const result = await db.insert(resolutionTransactionTable).values({
+    resolutionId,
+    action,
+    tokenId: tokenId ?? null,
+    userId: userId ?? null,
+    authorName: authorName ?? null,
+  }).returning();
   return result[0];
 }
 

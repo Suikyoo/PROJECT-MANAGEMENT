@@ -28,6 +28,9 @@ export const smtpPass = process.env.SMTP_PASS;
 export const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 export const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
+export const disableOTP = (process.env.DISABLE_OTP === "1") ? true : false
+console.log(disableOTP)
+
 if (!port) throw new Error("Port not set. ");
 if (!host) throw new Error("Host not set. ");
 if (!databaseUrl) throw new Error("db url missing. ");

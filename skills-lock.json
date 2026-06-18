@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336"
+    },
+    "solid-js-1.x-best-practices-and-api": {
+      "source": "doeixd/solid-skill",
+      "sourceType": "github",
+      "skillPath": "solid-js-1.x-best-practices-and-api/SKILL.md",
+      "computedHash": "029b7b803d21c7f86bcea88032a2e92760439cc917c63e08c0d676582d5f1756"
+    },
+    "solid-js-2.x-api-changes-and-best-practices": {
+      "source": "doeixd/solid-skill",
+      "sourceType": "github",
+      "skillPath": "solid-js-2.x-api-changes-and-best-practices/SKILL.md",
+      "computedHash": "4022dc4bc4dc90edc0885a3173143ac35247f070cbe6876236b8a14773b36847"
+    },
+    "solid-js-2.x-migration": {
+      "source": "doeixd/solid-skill",
+      "sourceType": "github",
+      "skillPath": "solid-js-2.x-migration/SKILL.md",
+      "computedHash": "db7989307129c0079402fb09cda82bfbb745bac1dbef55ac6890815515ccdcaf"
+    },
+    "solid-start-v2": {
+      "source": "doeixd/solid-skill",
+      "sourceType": "github",
+      "skillPath": "solid-start-v2/SKILL.md",
+      "computedHash": "c481c0b1306870355db936d085301b946bd0f02e4f474c9475fb35a66ba896f1"
+    },
+    "tailwind-css-patterns": {
+      "source": "giuseppe-trisciuoglio/developer-kit",
+      "sourceType": "github",
+      "skillPath": "plugins/developer-kit-typescript/skills/tailwind-css-patterns/SKILL.md",
+      "computedHash": "6092620c3af955a46ea2b94ca8a40197ac8392e6bbdc8c7515659328b186c770"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    }
+  }
+}

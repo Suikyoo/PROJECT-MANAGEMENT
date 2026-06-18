@@ -13,7 +13,7 @@ export default function AdminPage() {
   const [users, { refetch: refetchUsers }] = createResource<User[]>(getUsers);
   const [pendingUsers, { refetch: refetchPending }] = createResource<User[]>(getPendingUsers);
   const [tokens, { refetch: refetchTokens }] = createResource<Token[]>(getTokens);
-  const [projects] = createResource<Project[]>(getProjects);
+  const [projects] = createResource<Project[]>(() => getProjects());
 
   const [error, setError] = createSignal('');
   const [tab, setTab] = createSignal<'pending' | 'all' | 'tokens'>('pending');
@@ -162,8 +162,12 @@ export default function AdminPage() {
               <tbody class="divide-y divide-[#1F1F23]">
                 <For each={displayedUsers()}>{(user) => (
                   <tr class="text-zinc-300 hover:bg-[#121214] transition-colors">
-                    <td class="p-3 font-medium text-white">{user.name}</td>
-                    <td class="p-3 text-zinc-500">{user.email}</td>
+                    <td class="p-3 font-medium text-white">
+                      <A href={`/admin/user/${user.id}`} class="text-white hover:text-zinc-300 transition-colors no-underline">{user.name}</A>
+                    </td>
+                    <td class="p-3">
+                      <A href={`/admin/user/${user.id}`} class="text-zinc-500 hover:text-white transition-colors no-underline">{user.email}</A>
+                    </td>
                     <td class="p-3">
                       <select
                         value={user.role}

@@ -5,9 +5,9 @@ import { JSX } from "solid-js";
 export default function ProjectLayout({children}: {children?: JSX.Element}) {
   const navigate = useNavigate();
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
 
-  if (!isClientMode()) {
+  // Always check session — for client mode, skip the guard since auth is via token_id
+  if (!params.token_id) {
     let hasSession = false;
     try { hasSession = !!session(); } catch { /* session resource errored (e.g. getMe 401) */ }
     if (!hasSession) {
@@ -15,9 +15,12 @@ export default function ProjectLayout({children}: {children?: JSX.Element}) {
       return null;
     }
   }
+
   return (
-    <div class="p-5">
-      {children}
+    <div class="h-full overflow-hidden flex flex-col">
+      <div class="flex-1 overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }

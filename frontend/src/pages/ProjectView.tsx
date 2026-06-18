@@ -7,9 +7,6 @@ import {
   acceptTask, submitTask, approveTask,
   getTagsByTask, getTagsByProject, createTag, deleteTag,
   getProjectUsers,
-  tokenGetPhasesByProject, tokenGetTasksByPhase,
-  tokenGetTagsByTask, tokenGetTagsByProject,
-  tokenGetProjectUsers,
   type Phase, type Task, type TaskState, type Tag, type User,
 } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
@@ -20,16 +17,13 @@ export default function ProjectView() {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const projectId = () => Number(params.project_id);
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
   console.log("projectView: ", projectId());
   const view = () => (searchParams.view as string) || 'board';
 
   const [phases, { refetch: refetchPhases }] = createResource(
     projectId,
     async (pid) => {
-      if (isClientMode()) return tokenGetPhasesByProject(tokenId(), pid);
-      return getPhasesByProject(pid);
+      return getPhasesByProject(pid, params.token_id);
     }
   );
   const [tasksByPhase, setTasksByPhase] = createSignal<Record<number, Task[]>>({});
@@ -51,7 +45,7 @@ export default function ProjectView() {
   // Phase tasks loading
   const loadTasks = async (phaseId: number) => {
     try {
-      const t = isClientMode() ? await tokenGetTasksByPhase(tokenId(), phaseId) : await getTasksByPhase(phaseId);
+      const t = await getTasksByPhase(phaseId, params.token_id);
       setTasksByPhase((prev) => ({ ...prev, [phaseId]: t }));
     } catch {}
   };
@@ -61,7 +55,7 @@ export default function ProjectView() {
     const p = phases();
     if (p) {
       for (const ph of p) {
-        const t = isClientMode() ? await tokenGetTasksByPhase(tokenId(), ph.id) : await getTasksByPhase(ph.id);
+        const t = await getTasksByPhase(ph.id, params.token_id);
         setTasksByPhase((prev) => ({ ...prev, [ph.id]: t }));
       }
     }
@@ -76,18 +70,14 @@ export default function ProjectView() {
 
   const loadTaskTags = async (taskId: number) => {
     try {
-      const tags = isClientMode()
-        ? await tokenGetTagsByTask(tokenId(), taskId)
-        : await getTagsByTask(taskId);
+      const tags = await getTagsByTask(taskId, params.token_id);
       setTagsByTask(prev => ({ ...prev, [taskId]: tags }));
     } catch {}
   };
 
   const loadProjectTags = async () => {
     try {
-      const tags = isClientMode()
-        ? await tokenGetTagsByProject(tokenId(), projectId())
-        : await getTagsByProject(projectId());
+      const tags = await getTagsByProject(projectId(), params.token_id);
       setProjectTags(tags);
     } catch {}
   };
@@ -146,9 +136,7 @@ export default function ProjectView() {
   {
     const loadUsers = async (pid: number) => {
       try {
-        const result = isClientMode()
-          ? await tokenGetProjectUsers(tokenId(), pid)
-          : await getProjectUsers(pid);
+        const result = await getProjectUsers(pid, params.token_id);
         setProjectUsers(result);
       } catch { /* silent */ }
     };
@@ -175,7 +163,7 @@ export default function ProjectView() {
     e.preventDefault();
     setPhaseLoading(true);
     try {
-      await createPhase(projectId(), phaseName()); setShowCreatePhase(false);
+      await createPhase(projectId(), phaseName(), params.token_id); setShowCreatePhase(false);
       setPhaseName('');
       refetchPhases();
       refreshProjects();
@@ -214,7 +202,7 @@ export default function ProjectView() {
     e.preventDefault();
     setTaskLoading(true);
     try {
-      const task = await createTask(taskPhaseId(), taskTitle(), taskDesc(), taskPriority(), taskStart() || undefined, taskEnd() || undefined);
+      const task = await createTask(taskPhaseId(), taskTitle(), taskDesc(), taskPriority(), taskStart() || undefined, taskEnd() || undefined, params.token_id);
       // Create tags for the new task
       const tags = newTaskTags();
       for (const tagName of tags) {
@@ -405,7 +393,7 @@ export default function ProjectView() {
   });
 
   return (
-    <div class="max-w-5xl">
+    <div class="h-full flex flex-col max-w-5xl">
       <style>{`
         .sortable-ghost { opacity: 0.3; border-radius: 4px; }
         .sortable-chosen { opacity: 0.0; transform: scale(0.97); }
@@ -418,7 +406,7 @@ export default function ProjectView() {
         <div>
           <h2 class="text-base font-semibold text-white">Tasks</h2>
         </div>
-        <Show when={isSupervisor() && !isClientMode()}>
+        <Show when={isSupervisor() && !params.token_id}>
           <button onClick={() => setShowCreatePhase(true)} class="inline-flex items-center gap-1.5 bg-[#1F1F23] hover:bg-[#27272A] text-white text-[11px] font-medium px-3 py-1.5 rounded-md cursor-pointer transition-colors border border-[#27272A]">
             + New Phase
           </button>
@@ -440,6 +428,8 @@ export default function ProjectView() {
           </a>
         )}</For>
       </div>
+
+      <div class="flex-1 overflow-y-auto">
 
       {/* BOARD VIEW */}
       <Show when={view() === 'board'}>
@@ -486,7 +476,7 @@ export default function ProjectView() {
                   <h3 class="text-[12px] font-semibold text-white">{item().phase.name}</h3>
                   <span class={`status-chip ${item().phase.state === 'Complete' ? 'status-chip-green' : 'status-chip-orange'}`}>{item().phase.state}</span>
                 </div>
-                <Show when={isSupervisor() && !isClientMode()}>
+                <Show when={isSupervisor() && !params.token_id}>
                   <button onClick={() => openCreateTask(item().phase.id)} class="bg-[#1F1F23] hover:bg-[#27272A] text-zinc-400 hover:text-white text-[10px] font-medium py-1 px-2.5 rounded-md cursor-pointer transition-colors border border-[#27272A] whitespace-nowrap shrink-0">+ Task</button>
                 </Show>
               </div>
@@ -844,17 +834,18 @@ export default function ProjectView() {
         </div>
       </Show>
 
+      </div>
+
       {/* TASK DETAILS SLIDE-IN PANEL */}
       <Show when={detailTask()}>
         <TaskDetailPanel
           task={detailTask()!}
           tags={tagsByTask()[detailTask()!.id] || []}
           users={projectUsers()}
-          backUrl={isClientMode() ? `/client/${tokenId()}/project/${projectId()}` : `/insider/project/${projectId()}`}
+          backUrl={params.token_id ? `/client/${params.token_id}/project/${projectId()}` : `/insider/project/${projectId()}`}
           onClose={() => setDetailTask(null)}
           onModified={reloadAllTasks}
           roles={userRoles()}
-          isClientMode={isClientMode()}
           isSupervisor={isSupervisor()}
           onAccept={async (id) => { await acceptTask(id); }}
           onSubmit={async (id) => { await submitTask(id); }}

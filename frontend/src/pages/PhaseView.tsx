@@ -4,8 +4,6 @@ import { useParams, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByPhase, togglePhaseState,
   getPhaseLog, setPhaseLog, getPhaseComments, createPhaseComment, uploadImage,
-  tokenGetPhasesByProject, tokenGetTasksByPhase,
-  tokenGetPhaseLog,
   type Phase, type Task, type PhaseComment, PhaseLog
 } from '../lib/fetch';
 import { session } from '../lib/store';
@@ -17,8 +15,6 @@ import FileHandler from '@tiptap/extension-file-handler';
 
 export default function PhaseView() {
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
   const phaseId = () => Number(params.phase_id);
 
   const [error, setError] = createSignal('');
@@ -39,13 +35,9 @@ export default function PhaseView() {
     if (isNaN(pid) || pid <= 0 || isNaN(phid) || phid <= 0) return;
     setPhaseDataLoading(true);
     try {
-      const allPhases = isClientMode()
-        ? await tokenGetPhasesByProject(tokenId(), pid)
-        : await getPhasesByProject(pid);
+      const allPhases = await getPhasesByProject(pid, params.token_id);
       const found = allPhases.find((ph: Phase) => ph.id === phid) || null;
-      const tasks = isClientMode()
-        ? await tokenGetTasksByPhase(tokenId(), phid)
-        : await getTasksByPhase(phid);
+      const tasks = await getTasksByPhase(phid, params.token_id);
       setPhaseData({ phase: found, taskCount: tasks.length, tasks: tasks as Task[] });
     } catch {
       setPhaseData({ phase: null, taskCount: 0, tasks: [] });
@@ -56,7 +48,7 @@ export default function PhaseView() {
 
   const handleTogglePhase = async () => {
     try {
-      await togglePhaseState(phaseId());
+      await togglePhaseState(phaseId(), params.token_id);
       loadPhaseData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed');
@@ -84,12 +76,7 @@ export default function PhaseView() {
     if (isNaN(phid) || phid <= 0) return;
     setLogLoading(true);
     try {
-      if (isClientMode()) {
-        const result = await tokenGetPhaseLog(tokenId(), phid);
-        setInitialLogContent(result);
-        return;
-      }
-      const res = await getPhaseLog(phid);
+      const res = await getPhaseLog(phid, params.token_id);
       setInitialLogContent('error' in res ? { phaseId: phid, content: '' } : res);
     } catch {
       setInitialLogContent({ phaseId: phid, content: '' });
@@ -99,11 +86,11 @@ export default function PhaseView() {
   };
 
   const userRoles = createMemo(() => {
-    if (isClientMode()) return [] as string[];
+    if (params.token_id) return [] as string[];
     try { return session()?.roles || []; } catch { return [] as string[]; }
   });
   const isSupervisor = () => userRoles().includes('Supervisor');
-  const canEditLog = () => isSupervisor() && !isClientMode();
+  const canEditLog = () => isSupervisor() && !params.token_id;
 
   // Create editor when element is available and edit modal is open
   createEffect(() => {
@@ -181,10 +168,10 @@ export default function PhaseView() {
   });
 
   const handleSaveLog = async () => {
-    if (isClientMode()) return;
+    if (params.token_id) return;
     setLogSaving(true);
     try {
-      await setPhaseLog(phaseId(), logContent()?.content || "");
+      await setPhaseLog(phaseId(), logContent()?.content || "", params.token_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save log');
     } finally {
@@ -205,7 +192,7 @@ export default function PhaseView() {
     if (isNaN(phid) || phid <= 0) return;
     setCommentsLoading(true);
     try {
-      const result = await getPhaseComments(phid);
+      const result = await getPhaseComments(phid, params.token_id);
       setComments(result);
     } catch {
       // silent
@@ -233,7 +220,7 @@ export default function PhaseView() {
     if (!content) return;
     setCommentLoading(true);
     try {
-      await createPhaseComment(phaseId(), content);
+      await createPhaseComment(phaseId(), content, params.token_id);
       setNewComment('');
       refetchComments();
     } catch (err: unknown) {
@@ -244,13 +231,15 @@ export default function PhaseView() {
   };
 
   const backUrl = () => {
-    if (isClientMode()) return `/client/${tokenId()}/project/${dashboardProjectId()}`;
+    if (params.token_id) return `/client/${params.token_id}/project/${dashboardProjectId()}`;
     return `/insider/project/${dashboardProjectId()}`;
   };
 
   return (
     <div class="min-h-screen bg-[#0B0B0C] flex items-start justify-center pt-16 pb-16 px-4">
-      <div class="w-full max-w-2xl">
+      <div class="h-full flex flex-col w-full max-w-2xl">
+        <div class="flex-1 overflow-y-auto">
+
         {/* Back link */}
         <A
           href={backUrl()}
@@ -367,7 +356,7 @@ export default function PhaseView() {
                 </Show>
 
                 {/* Comments Section */}
-                <Show when={!isClientMode()} fallback={
+                <Show when={!params.token_id} fallback={
                   <div class="border-t border-[#1F1F23] pt-4">
                     <p class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Comments</p>
                     <p class="text-zinc-600 text-[11px] mb-3">Comments are available to insiders.</p>
@@ -384,7 +373,9 @@ export default function PhaseView() {
                         <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23] hover:bg-[#121214] transition-colors">
                           <p class="text-[12px] text-zinc-300 leading-relaxed">{fb.content}</p>
                           <div class="flex items-center gap-2 mt-1.5">
-                            <span class="text-[10px] text-zinc-500">{fb.authorName || (fb.userId ? `User #${fb.userId}` : 'Anonymous')}</span>
+                            <Show when={fb.userId && fb.userId > 0} fallback={<span class="text-[10px] text-zinc-500">{fb.authorName || 'Anonymous'}</span>}>
+                              <A href={`/insider/users/${fb.userId}`} class="text-[10px] text-blue-400 hover:underline">{fb.authorName}</A>
+                            </Show>
                             <span class="text-[10px] text-zinc-700">·</span>
                             <span class="text-[10px] text-zinc-600">{new Date(fb.createdAt).toLocaleString()}</span>
                           </div>
@@ -435,7 +426,7 @@ export default function PhaseView() {
                 </div>
 
                 {/* Toggle state (Supervisor only) */}
-                <Show when={isSupervisor() && !isClientMode()}>
+                <Show when={isSupervisor() && !params.token_id}>
                   <button
                     onClick={handleTogglePhase}
                     class="bg-[#1F1F23] border border-[#27272A] hover:bg-[#27272A] text-zinc-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-sm cursor-pointer transition-colors w-full text-center"
@@ -448,6 +439,8 @@ export default function PhaseView() {
           )}
         </Show>
       </div>
+
+        </div>
 
       {/* EDIT LOG MODAL */}
       <Show when={showEditLog()}>

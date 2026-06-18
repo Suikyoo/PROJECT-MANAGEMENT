@@ -19,8 +19,6 @@ export interface TaskDetailPanelProps {
   onClose: () => void;
   /** Current user roles (empty array in client mode) */
   roles: string[];
-  /** Whether in client/guest mode */
-  isClientMode: boolean;
   /** Action handlers — wired by parent */
   onAccept?: (taskId: number) => Promise<void>;
   onSubmit?: (taskId: number) => Promise<void>;
@@ -85,12 +83,12 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
   };
 
   return (
-    <div class="fixed inset-0 z-40 flex">
+    <div class="fixed inset-0 z-40 flex overflow-hidden">
       {/* Backdrop */}
       <div class="flex-1 bg-black/60" onClick={props.onClose} />
 
       {/* Slide-in panel from right */}
-      <div class="w-full max-w-xl bg-[#0B0B0C] border-l border-[#1F1F23] overflow-y-auto shadow-2xl animate-[slideInRight_0.25s_ease-out]">
+      <div class="w-full max-w-xl bg-[#0B0B0C] border-l border-[#1F1F23] overflow-y-auto shadow-2xl animate-[slideInRight_0.25s_ease-out] min-h-0">
         <div class="p-5">
           {/* Header bar */}
           <div class="flex items-center justify-between mb-5">
@@ -151,7 +149,7 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
                       return (
                         <span style={{"background-color": c.bg, color: c.text}} class="text-[10px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 leading-none">
                           {tag.name}
-                          <Show when={props.isSupervisor && !props.isClientMode}>
+                          <Show when={props.isSupervisor && !props.roles.includes('Client')}>
                             <button
                               onClick={() => props.onRemoveTag?.(tag.id, t().id)}
                               class="text-white/60 hover:text-white cursor-pointer bg-transparent border-none leading-none text-xs"
@@ -165,7 +163,7 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
               </Show>
 
               {/* Add tag input */}
-              <Show when={props.isSupervisor && !props.isClientMode && props.onAddTag}>
+              <Show when={props.isSupervisor && props.onAddTag}>
                 <div class="mb-4">
                   <input
                     type="text"
@@ -182,7 +180,7 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
               </Show>
 
               {/* Workflow actions */}
-              <Show when={!props.isClientMode}>
+              <Show when={props.roles.length > 0}>
                 <div class="border-t border-[#1F1F23] pt-4 flex gap-2">
                   <Show when={props.roles.includes('Developer') && t().state === 'backlog'}>
                     <button onClick={handleAccept} class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-blue-500/30">

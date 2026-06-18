@@ -92,6 +92,13 @@
       "when": 1781712431706,
       "tag": "0012_deep_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781767737047,
+      "tag": "0013_hard_next_avengers",
+      "breakpoints": true
     }
   ]
 }

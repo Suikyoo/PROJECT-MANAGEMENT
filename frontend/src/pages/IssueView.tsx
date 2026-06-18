@@ -1,17 +1,17 @@
 import { useParams, A } from '@solidjs/router';
-import { createSignal, createEffect, For, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, For, Show } from 'solid-js';
 import {
   getIssueById, getIssueComments, createIssueComment, getIssueTags, getResolution,
-  tokenGetIssueComments, tokenCreateIssueComment, tokenGetIssueTags, tokenGetResolution,
   createResolution,
+  getIssueTransactions, createIssueTransaction,
+  getResolutionTransactions, createResolutionTransaction,
   type Issue, type IssueComment, type IssueTag, type Resolution,
+  type IssueTransaction, type ResolutionTransaction, type IssueAction, type ResolutionAction,
 } from '../lib/fetch';
 import { currentUser } from '../lib/store';
 
 export default function IssueView() {
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
   const projectId = () => Number(params.project_id);
   const issueId = () => Number(params.issue_id);
 
@@ -31,13 +31,16 @@ export default function IssueView() {
   const [resDesc, setResDesc] = createSignal('');
   const [resProof, setResProof] = createSignal('');
 
+  // Transactions (log history)
+  const [issueTransactions, setIssueTransactions] = createSignal<IssueTransaction[]>([]);
+  const [resolutionTransactions, setResolutionTransactions] = createSignal<ResolutionTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = createSignal(false);
+  const [stampLoading, setStampLoading] = createSignal(false);
+
   const loadIssue = async () => {
     setLoading(true);
     try {
-      // getIssueById already uses tokenApi internally? No - need to check.
-      // Use the insider API directly since this is an insider-only detail view... 
-      // Actually, the token API doesn't have getIssueById. Let me use the insider one.
-      const data = await getIssueById(issueId());
+      const data = await getIssueById(issueId(), params.token_id);
       setIssue(data);
     } catch (e) { /* ignore */ }
     setLoading(false);
@@ -47,9 +50,9 @@ export default function IssueView() {
     setCommentsLoading(true);
     try {
       const [cmts, tgs, res] = await Promise.all([
-        isClientMode() ? tokenGetIssueComments(tokenId(), issueId()) : getIssueComments(issueId()),
-        isClientMode() ? tokenGetIssueTags(tokenId(), issueId()) : getIssueTags(issueId()),
-        isClientMode() ? tokenGetResolution(tokenId(), issueId()) : getResolution(issueId()),
+        getIssueComments(issueId(), params.token_id),
+        getIssueTags(issueId(), params.token_id),
+        getResolution(issueId(), params.token_id),
       ]);
       setComments(cmts);
       setTags(tgs);
@@ -58,7 +61,70 @@ export default function IssueView() {
     setCommentsLoading(false);
   };
 
-  createEffect(() => { if (issueId()) { loadIssue(); loadComments(); } });
+  const loadTransactions = async (resolutionId?: number | null) => {
+    setTransactionsLoading(true);
+    try {
+      const [it, rt] = await Promise.all([
+        getIssueTransactions(issueId(), params.token_id),
+        resolutionId ? getResolutionTransactions(resolutionId, params.token_id) : Promise.resolve([]),
+      ]);
+      setIssueTransactions(it);
+      setResolutionTransactions(rt);
+    } catch (e) { /* ignore */ }
+    setTransactionsLoading(false);
+  };
+
+  createEffect(() => {
+    if (issueId()) {
+      loadIssue().then(() => {
+        loadComments();
+        loadTransactions(issue()?.resolutionId);
+      });
+    }
+  });
+
+  // Combined chronological timeline
+  const timeline = createMemo(() => {
+    const items: Array<
+      | { type: 'issue'; data: IssueTransaction }
+      | { type: 'resolution'; data: ResolutionTransaction }
+    > = [];
+    for (const t of issueTransactions()) items.push({ type: 'issue' as const, data: t });
+    for (const t of resolutionTransactions()) items.push({ type: 'resolution' as const, data: t });
+    items.sort((a, b) => new Date(a.data.createdAt).getTime() - new Date(b.data.createdAt).getTime());
+    return items;
+  });
+
+  // Determine current state from last transaction
+  const lastIssueAction = createMemo(() => {
+    const arr = issueTransactions();
+    if (arr.length === 0) return null;
+    return arr[arr.length - 1].action;
+  });
+  const lastResAction = createMemo(() => {
+    const arr = resolutionTransactions();
+    if (arr.length === 0) return null;
+    return arr[arr.length - 1].action;
+  });
+
+  const handleStampIssue = async (action: IssueAction) => {
+    setStampLoading(true);
+    try {
+      await createIssueTransaction(issueId(), action, params.token_id);
+      await loadTransactions(issue()?.resolutionId);
+    } catch (e) { /* ignore */ }
+    setStampLoading(false);
+  };
+
+  const handleStampResolution = async (action: ResolutionAction) => {
+    if (!resolution()) return;
+    setStampLoading(true);
+    try {
+      await createResolutionTransaction(resolution()!.id, action, params.token_id);
+      await loadTransactions(issue()?.resolutionId);
+    } catch (e) { /* ignore */ }
+    setStampLoading(false);
+  };
 
   const handleSubmitComment = async (e: Event) => {
     e.preventDefault();
@@ -66,11 +132,7 @@ export default function IssueView() {
     if (!content) return;
     setCommentLoading(true);
     try {
-      if (isClientMode()) {
-        await tokenCreateIssueComment(tokenId(), issueId(), content);
-      } else {
-        await createIssueComment(issueId(), content);
-      }
+      await createIssueComment(issueId(), content, params.token_id);
       setNewComment('');
       loadComments();
     } catch (e) { /* ignore */ }
@@ -82,7 +144,7 @@ export default function IssueView() {
     const title = resTitle().trim();
     if (!title) return;
     try {
-      await createResolution(issueId(), title, resDesc(), resProof());
+      await createResolution(issueId(), title, resDesc(), resProof(), params.token_id);
       setResTitle('');
       setResDesc('');
       setResProof('');
@@ -91,8 +153,8 @@ export default function IssueView() {
     } catch (e) { /* ignore */ }
   };
 
-  const backUrl = isClientMode()
-    ? `/client/${tokenId()}/project/${projectId()}/issues`
+  const backUrl = params.token_id
+    ? `/client/${params.token_id}/project/${projectId()}/issues`
     : `/insider/project/${projectId()}/issues`;
 
   const priorityColor = (p: string) => {
@@ -105,8 +167,16 @@ export default function IssueView() {
     }
   };
 
+  const normalizeUrl = (url: string): string => {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return 'https://' + url;
+  };
+
   return (
-    <div class="max-w-6xl mx-auto px-4 py-6">
+    <div class="h-full flex flex-col max-w-6xl mx-auto px-4 py-6">
+      <div class="flex-1 overflow-y-auto">
+
       {/* Back link */}
       <A href={backUrl} class="text-zinc-500 hover:text-zinc-300 text-xs mb-4 inline-block transition-colors">
         ← Back to Issues
@@ -125,7 +195,9 @@ export default function IssueView() {
             {issue()!.resolutionId && <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">Resolved</span>}
           </div>
           <div class="flex items-center gap-2 text-[11px] text-zinc-500">
-            <span>{issue()!.authorName || (issue()!.userId ? `User #${issue()!.userId}` : 'Anonymous')}</span>
+            <Show when={issue()!.userId != null && issue()!.userId > 0} fallback={<span>{issue()!.authorName || 'Anonymous'}</span>}>
+              <A href={`/insider/users/${issue()!.userId}`} class="text-blue-400 hover:underline">{issue()!.authorName}</A>
+            </Show>
             <span>·</span>
             <span>{new Date(issue()!.createdAt).toLocaleString()}</span>
           </div>
@@ -133,7 +205,7 @@ export default function IssueView() {
             <p class="text-[13px] text-zinc-300 mt-3 leading-relaxed">{issue()!.description}</p>
           )}
           {issue()!.proof && (
-            <a href={issue()!.proof} target="_blank" rel="noopener" class="text-[12px] text-blue-400 underline mt-1 inline-block">View proof (Jam)</a>
+            <a href={normalizeUrl(issue()!.proof)} target="_blank" rel="noopener" class="text-[12px] text-blue-400 underline mt-1 inline-block">View proof (Jam)</a>
           )}
         </div>
 
@@ -153,7 +225,9 @@ export default function IssueView() {
                     <div class="bg-[#0B0B0C] px-3 py-2 rounded-md border border-[#1F1F23]">
                       <p class="text-[12px] text-zinc-300 leading-relaxed">{c.content}</p>
                       <div class="flex items-center gap-2 mt-1.5">
-                        <span class="text-[10px] text-zinc-600">{c.authorName || (c.userId ? `User #${c.userId}` : 'Anonymous')}</span>
+                        <Show when={c.userId && c.userId > 0} fallback={<span class="text-[10px] text-zinc-600">{c.authorName || 'Anonymous'}</span>}>
+                          <A href={`/insider/users/${c.userId}`} class="text-[10px] text-blue-400 hover:underline">{c.authorName}</A>
+                        </Show>
                         <span class="text-[10px] text-zinc-700">·</span>
                         <span class="text-[10px] text-zinc-600">{new Date(c.createdAt).toLocaleString()}</span>
                       </div>
@@ -182,19 +256,13 @@ export default function IssueView() {
                   <p class="text-[13px] text-white font-medium">{resolution()!.title}</p>
                   {resolution()!.description && <p class="text-[12px] text-zinc-400 mt-1">{resolution()!.description}</p>}
                   {resolution()!.proof && (
-                    <a href={resolution()!.proof} target="_blank" rel="noopener" class="text-[11px] text-blue-400 underline mt-1 inline-block">View proof (Jam)</a>
+                    <a href={normalizeUrl(resolution()!.proof)} target="_blank" rel="noopener" class="text-[11px] text-blue-400 underline mt-1 inline-block">View proof (Jam)</a>
                   )}
                 </div>
               </Show>
 
               {/* Resolution form — Supervisor only in insider mode */}
-              <Show when={(currentUser()?.roles || []).includes('Supervisor') && !isClientMode() && !resolution()}>
-                <Show when={!showResolutionForm()}>
-                  <button onClick={() => setShowResolutionForm(true)}
-                    class="w-full bg-green-600 text-white font-medium text-xs px-3 py-2 rounded-md cursor-pointer hover:bg-green-700 transition-colors">
-                    Forward Resolution
-                  </button>
-                </Show>
+              <Show when={(currentUser()?.roles || []).includes('Supervisor') && !params.token_id && !resolution()}>
                 <Show when={showResolutionForm()}>
                   <form onSubmit={handleSubmitResolution}>
                     <input type="text" placeholder="Resolution title" value={resTitle()} onInput={(e) => setResTitle(e.currentTarget.value)}
@@ -215,13 +283,104 @@ export default function IssueView() {
               </Show>
 
               {/* No resolution, not a supervisor */}
-              <Show when={!resolution() && !((currentUser()?.roles || []).includes('Supervisor') && !isClientMode())}>
+              <Show when={!resolution() && !((currentUser()?.roles || []).includes('Supervisor') && !params.token_id)}>
                 <p class="text-zinc-600 text-[11px]">No resolution yet. A Supervisor will review this issue.</p>
               </Show>
             </div>
           </div>
         </div>
+
+        {/* History / Activity Log */}
+        <div class="mt-8">
+          <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">History</h3>
+
+          <Show when={transactionsLoading()}>
+            <p class="text-zinc-500 text-xs">Loading...</p>
+          </Show>
+
+          <Show when={!transactionsLoading() && timeline().length === 0}>
+            <p class="text-zinc-600 text-[11px]">No activity yet</p>
+          </Show>
+
+          <Show when={timeline().length > 0}>
+            <div class="flex flex-col gap-1.5 mb-4">
+              <For each={timeline()}>{(item) => {
+                const isIssue = item.type === 'issue';
+                return (
+                  <div class="flex items-center gap-2 px-3 py-2 rounded border-l-2"
+                    classList={{
+                      'border-blue-500/40 bg-blue-500/5': isIssue,
+                      'border-green-500/40 bg-green-500/5': !isIssue,
+                    }}>
+                    <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+                      classList={{
+                        'bg-blue-500/20 text-blue-400': isIssue,
+                        'bg-green-500/20 text-green-400': !isIssue,
+                      }}>{item.data.action}</span>
+                    <Show when={item.data.userId && item.data.userId > 0} fallback={<span class="text-[10px] text-zinc-400">{item.data.authorName || 'System'}</span>}>
+                      <A href={`/insider/users/${item.data.userId}`} class="text-[10px] text-blue-400 hover:underline">{item.data.authorName}</A>
+                    </Show>
+                    <span class="text-[10px] text-zinc-600 ml-auto shrink-0">{new Date(item.data.createdAt).toLocaleString()}</span>
+                  </div>
+                );
+              }}</For>
+            </div>
+          </Show>
+
+          {/* Stamp action buttons */}
+          <div class="flex gap-2 flex-wrap">
+            {/* Insider-only: Issue actions */}
+            <Show when={!params.token_id && currentUser()}>
+              <Show when={lastIssueAction() !== 'open'}>
+                <button onClick={() => handleStampIssue('open')} disabled={stampLoading()}
+                  class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-blue-500/30 disabled:opacity-40 transition-colors">
+                  Open
+                </button>
+              </Show>
+              <Show when={lastIssueAction() === 'open'}>
+                <button onClick={() => handleStampIssue('testing')} disabled={stampLoading()}
+                  class="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-orange-500/30 disabled:opacity-40 transition-colors">
+                  Testing
+                </button>
+              </Show>
+              <Show when={lastIssueAction() === 'testing'}>
+                <button onClick={() => handleStampIssue('closed')} disabled={stampLoading()}
+                  class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-emerald-500/30 disabled:opacity-40 transition-colors">
+                  Close
+                </button>
+              </Show>
+              <Show when={lastIssueAction() !== 'closed' && lastIssueAction() !== 'rejected'}>
+                <button onClick={() => handleStampIssue('rejected')} disabled={stampLoading()}
+                  class="bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-red-500/30 disabled:opacity-40 transition-colors">
+                  Reject
+                </button>
+              </Show>
+            </Show>
+
+            {/* Token-only: Resolution actions */}
+            <Show when={!!params.token_id && resolution()}>
+              <Show when={lastResAction() !== 'to-review'}>
+                <button onClick={() => handleStampResolution('to-review')} disabled={stampLoading()}
+                  class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-blue-500/30 disabled:opacity-40 transition-colors">
+                  To Review
+                </button>
+              </Show>
+              <Show when={lastResAction() === 'to-review' || lastResAction() === 'revise'}>
+                <button onClick={() => handleStampResolution('resolved')} disabled={stampLoading()}
+                  class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-emerald-500/30 disabled:opacity-40 transition-colors">
+                  Resolve
+                </button>
+                <button onClick={() => handleStampResolution('revise')} disabled={stampLoading()}
+                  class="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-medium text-[10px] px-3 py-1 rounded cursor-pointer border border-orange-500/30 disabled:opacity-40 transition-colors">
+                  Revise
+                </button>
+              </Show>
+            </Show>
+          </div>
+        </div>
       </Show>
+
+      </div>
     </div>
   );
 }

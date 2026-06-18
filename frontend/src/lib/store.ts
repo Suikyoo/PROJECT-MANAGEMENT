@@ -84,7 +84,7 @@ export const currentUser = () => session();
 
 // --- Projects ---
 
-export const [projects, { refetch: refetchProjects }] = createResource<Project[]>(getProjects);
+export const [projects, { refetch: refetchProjects }] = createResource<Project[]>(() => getProjects());
 
 export function getProjectById(id: number): Project | undefined {
   return projects()?.find(p => p.id === id);

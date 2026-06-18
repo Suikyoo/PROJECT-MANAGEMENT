@@ -2,7 +2,7 @@
 import { For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
-import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, tokenGetProjects, tokenGetPhasesByProject, tokenGetTasksByProject, type Project, type Phase, type Task, type User } from '../lib/fetch';
+import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, type Project, type Phase, type Task, type User } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
 import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
@@ -12,14 +12,12 @@ Chart.register(BarElement, CategoryScale, LinearScale, BarController, Tooltip);
 export default function Projects() {
   const navigate = useNavigate();
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
-  const basePath = () => isClientMode() ? `/client/${tokenId()}` : '/insider';
+  const basePath = () => params.token_id ? `/client/${params.token_id}` : '/insider';
 
-  // Data fetching: use token API in client mode, regular API in insider mode
-  const projectsFetcher = () => isClientMode() ? tokenGetProjects(tokenId()) : getProjects();
-  const phasesFetcher = (projectId: number) => isClientMode() ? tokenGetPhasesByProject(tokenId(), projectId) : getPhasesByProject(projectId);
-  const tasksFetcher = (projectId: number) => isClientMode() ? tokenGetTasksByProject(tokenId(), projectId) : getTasksByProject(projectId);
+  // Data fetching: pass token_id — backend handles both insider (cookie) and client (token) auth
+  const projectsFetcher = () => getProjects(params.token_id);
+  const phasesFetcher = (projectId: number) => getPhasesByProject(projectId, params.token_id);
+  const tasksFetcher = (projectId: number) => getTasksByProject(projectId, params.token_id);
 
   const [projects, { refetch }] = createResource<Project[]>(projectsFetcher);
   const [showCreate, setShowCreate] = createSignal(false);
@@ -34,7 +32,7 @@ export default function Projects() {
   const [projectUsers, setProjectUsers] = createSignal<Record<number, User[]>>({});
 
   const isSupervisor = createMemo(() => {
-    if (isClientMode()) return false;
+    if (params.token_id) return false;
     try { return (session()?.roles || []).includes('Supervisor'); } catch { return false; }
   });
 
@@ -43,7 +41,7 @@ export default function Projects() {
     setError('');
     setLoading(true);
     try {
-      await createProject(projName(), projDesc());
+      await createProject(projName(), projDesc(), params.token_id);
       setShowCreate(false);
       setProjName('');
       setProjDesc('');
@@ -72,8 +70,8 @@ export default function Projects() {
   });
 
   // Fetch all users (for Team Workload name mapping)
-  createResource(() => !isClientMode(), async () => {
-    if (isClientMode()) return;
+  createResource(() => !params.token_id, async () => {
+    if (params.token_id) return;
     try {
       const users = await getAllUsers().catch(() => [] as User[]);
       setAllUsers(users);

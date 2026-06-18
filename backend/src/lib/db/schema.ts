@@ -19,7 +19,6 @@ export const userTable = pgTable('users', {
 	name: text('name').notNull(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  role: text("role").notNull().default("Developer"),
   approved: text("approved").notNull().default("pending"), // "pending" | "approved" | "rejected"
 });
 
@@ -46,7 +45,7 @@ export const taskTable = pgTable('tasks', {
 export const projectCommentTable = pgTable('project_comments', {
   id: serial('id').primaryKey(),
   projectId: integer("project_id").references(() => projectTable.id).notNull(),
-  userId: integer("user_id").references(() => userTable.id),
+  userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
@@ -55,7 +54,7 @@ export const projectCommentTable = pgTable('project_comments', {
 export const phaseCommentTable = pgTable('phase_comments', {
   id: serial('id').primaryKey(),
   phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
-  userId: integer("user_id").references(() => userTable.id),
+  userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
@@ -98,10 +97,32 @@ export const issueTable = pgTable('issues', {
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
 });
 
+// Issue transaction log (insiders stamp) — actions: open → (testing → closed) | rejected
+export const issueTransactionTable = pgTable('issue_transactions', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').references(() => issueTable.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer("user_id").references(() => userTable.id),                      // insider who stamped
+  tokenId: uuid('token_id').references(() => tokenTable.id),                       // client token (if applicable)
+  authorName: text("author_name"),                                                  // display name for the stamper
+  action: text("action", { enum: ["open", "testing", "closed", "rejected"] }).notNull(),
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
+// Resolution transaction log (client-tokens stamp) — actions: to-review → resolved | revise
+export const resolutionTransactionTable = pgTable('resolution_transactions', {
+  id: serial('id').primaryKey(),
+  resolutionId: integer('resolution_id').references(() => resolutionTable.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer("user_id").references(() => userTable.id),                      // (nullable, not used for token stamps)
+  tokenId: uuid('token_id').references(() => tokenTable.id),                       // client token who stamped
+  authorName: text("author_name"),                                                  // display name for the stamper
+  action: text("action", { enum: ["to-review", "revise", "resolved"] }).notNull(),
+  createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),
+});
+
 export const issueCommentTable = pgTable('issue_comments', {
   id: serial('id').primaryKey(),
   issueId: integer('issue_id').references(() => issueTable.id).notNull(),
-  userId: integer("user_id").references(() => userTable.id),
+  userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
   createdAt: timestamp({precision: 6, withTimezone: false}).defaultNow().notNull(),

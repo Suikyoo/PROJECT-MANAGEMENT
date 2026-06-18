@@ -1,6 +1,6 @@
 // ~/src/lib/fetch.ts
 
-export type Role = 'Supervisor' | 'QA' | 'Developer';
+export type Role = 'Supervisor' | 'QA' | 'Developer' | 'Client';
 export type TaskState = 'backlog' | 'in-progress' | 'to review' | 'QA approved';
 export type PhaseState = 'UAT' | 'Complete';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
@@ -10,6 +10,7 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  roles: string[];
   approved: ApprovalStatus;
 }
 
@@ -109,6 +110,29 @@ export interface Resolution {
   proof: string;
 }
 
+export type IssueAction = 'open' | 'testing' | 'closed' | 'rejected';
+export type ResolutionAction = 'to-review' | 'revise' | 'resolved';
+
+export interface IssueTransaction {
+  id: number;
+  issueId: number;
+  userId: number | null;
+  tokenId: string | null;
+  authorName: string | null;
+  action: IssueAction;
+  createdAt: string;
+}
+
+export interface ResolutionTransaction {
+  id: number;
+  resolutionId: number;
+  userId: number | null;
+  tokenId: string | null;
+  authorName: string | null;
+  action: ResolutionAction;
+  createdAt: string;
+}
+
 export interface ProjectLog {
   id?: number;
   projectId: number;
@@ -131,9 +155,25 @@ export interface SessionUser {
 
 const BASE = '/api';
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${url}`, {
+async function api<T>(url: string, options?: RequestInit, tokenId?: string): Promise<T> {
+  const method = (options?.method || 'GET').toUpperCase();
+
+  // For GET/HEAD requests, send token_id as query param (fetch spec throws on body+GET)
+  let resolvedUrl = url;
+  if (tokenId !== undefined && (method === 'GET' || method === 'HEAD')) {
+    const sep = url.includes('?') ? '&' : '?';
+    resolvedUrl = `${url}${sep}token_id=${encodeURIComponent(tokenId)}`;
+    tokenId = undefined; // don't also put in body
+  }
+
+  const existingBody = options?.body ? JSON.parse(options.body as string) : {};
+  const merged = { token_id: tokenId, ...existingBody };
+  // Only attach body if there's actual content or if caller provided options (mutating request)
+  const body = (options || tokenId !== undefined) ? JSON.stringify(merged) : undefined;
+
+  const res = await fetch(`${BASE}${resolvedUrl}`, {
     ...options,
+    body,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
@@ -185,174 +225,164 @@ export const adminLogin = (email: string, password: string) =>
   });
 
 // Projects
-export const getProjects = () =>
-  api<Project[]>('/projects');
+export const getProjects = (tokenId?: string) =>
+  api<Project[]>('/projects', undefined, tokenId);
 
-export const getProject = (id: number) =>
-  api<Project[]>('/projects/' + id);
+export const getProject = (id: number, tokenId?: string) =>
+  api<Project[]>('/projects/' + id, undefined, tokenId);
 
-export const getPhasesByProject = (projectId: number) => {
-  console.log(projectId)
-  return api<Phase[]>('/projects/' + projectId + '/phases');
-}
+export const getPhasesByProject = (projectId: number, tokenId?: string) =>
+  api<Phase[]>('/projects/' + projectId + '/phases', undefined, tokenId);
 
-export const createProject = (name: string, description: string) =>
+export const createProject = (name: string, description: string, tokenId?: string) =>
   api<Project>('/projects', {
     method: 'POST',
     body: JSON.stringify({ name, description }),
-  });
+  }, tokenId);
 
 // Phases
-export const createPhase = (projectId: number, name: string) =>
+export const createPhase = (projectId: number, name: string, tokenId?: string) =>
   api<Phase>('/projects/' + projectId + '/phases', {
     method: 'POST',
     body: JSON.stringify({ name }),
-  });
+  }, tokenId);
 
-export const togglePhaseState = (phaseId: number) =>
-  api<Phase[]>('/phases/' + phaseId + '/toggle', { method: 'POST' });
+export const togglePhaseState = (phaseId: number, tokenId?: string) =>
+  api<Phase[]>('/phases/' + phaseId + '/toggle', { method: 'POST' }, tokenId);
 
 // Tasks
-export const getTasksByPhase = (phaseId: number) =>
-  api<Task[]>('/phases/' + phaseId + '/tasks');
+export const getTasksByPhase = (phaseId: number, tokenId?: string) =>
+  api<Task[]>('/phases/' + phaseId + '/tasks', undefined, tokenId);
 
-export const getTasksByProject = (projectId: number) =>
-  api<Task[]>('/projects/' + projectId + '/tasks');
+export const getTasksByProject = (projectId: number, tokenId?: string) =>
+  api<Task[]>('/projects/' + projectId + '/tasks', undefined, tokenId);
 
-export const createTask = (phaseId: number, title: string, description: string, priority?: string, start?: string, end?: string) =>
+export const createTask = (phaseId: number, title: string, description: string, priority?: string, start?: string, end?: string, tokenId?: string) =>
   api<Task>('/phases/' + phaseId + '/tasks', {
     method: 'POST',
     body: JSON.stringify({ title, description, priority, start, end }),
-  });
+  }, tokenId);
 
-export const acceptTask = (taskId: number) =>
-  api<Task[]>('/tasks/' + taskId + '/accept', { method: 'POST' });
+export const acceptTask = (taskId: number, tokenId?: string) =>
+  api<Task[]>('/tasks/' + taskId + '/accept', { method: 'POST' }, tokenId);
 
-export const submitTask = (taskId: number) =>
-  api<Task[]>('/tasks/' + taskId + '/submit', { method: 'POST' });
+export const submitTask = (taskId: number, tokenId?: string) =>
+  api<Task[]>('/tasks/' + taskId + '/submit', { method: 'POST' }, tokenId);
 
-export const approveTask = (taskId: number) =>
-  api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' });
+export const approveTask = (taskId: number, tokenId?: string) =>
+  api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' }, tokenId);
 
 // Tags
-export const getTagsByTask = (taskId: number) =>
-  api<Tag[]>('/tasks/' + taskId + '/tags');
+export const getTagsByTask = (taskId: number, tokenId?: string) =>
+  api<Tag[]>('/tasks/' + taskId + '/tags', undefined, tokenId);
 
-export const getTagsByProject = (projectId: number) =>
-  api<Tag[]>('/projects/' + projectId + '/tags');
+export const getTagsByProject = (projectId: number, tokenId?: string) =>
+  api<Tag[]>('/projects/' + projectId + '/tags', undefined, tokenId);
 
-export const createTag = (taskId: number, name: string) =>
+export const createTag = (taskId: number, name: string, tokenId?: string) =>
   api<Tag>('/tasks/' + taskId + '/tags', {
     method: 'POST',
     body: JSON.stringify({ name }),
-  });
+  }, tokenId);
 
-export const deleteTag = (tagId: number) =>
-  api<void>('/tags/' + tagId, { method: 'DELETE' });
+export const deleteTag = (tagId: number, tokenId?: string) =>
+  api<void>('/tags/' + tagId, { method: 'DELETE' }, tokenId);
 
 // Comments (Project) — insider only
-export const getProjectComments = (projectId: number) =>
-  api<ProjectComment[]>('/projects/' + projectId + '/comments');
+export const getProjectComments = (projectId: number, tokenId?: string) =>
+  api<ProjectComment[]>('/projects/' + projectId + '/comments', undefined, tokenId);
 
-export const createProjectComment = (projectId: number, content: string, authorName?: string) =>
+export const createProjectComment = (projectId: number, content: string, authorName?: string, tokenId?: string) =>
   api<ProjectComment>('/projects/' + projectId + '/comments', {
     method: 'POST',
     body: JSON.stringify({ content, authorName }),
-  });
+  }, tokenId);
 
 // Comments (Phase) — insider only
-export const getPhaseComments = (phaseId: number) =>
-  api<PhaseComment[]>('/phases/' + phaseId + '/comments');
+export const getPhaseComments = (phaseId: number, tokenId?: string) =>
+  api<PhaseComment[]>('/phases/' + phaseId + '/comments', undefined, tokenId);
 
-export const createPhaseComment = (phaseId: number, content: string, authorName?: string) =>
+export const createPhaseComment = (phaseId: number, content: string, authorName?: string, tokenId?: string) =>
   api<PhaseComment>('/phases/' + phaseId + '/comments', {
     method: 'POST',
     body: JSON.stringify({ content, authorName }),
-  });
+  }, tokenId);
 
-// Issues (insider)
-export const getIssuesByProject = (projectId: number) =>
-  api<Issue[]>('/projects/' + projectId + '/issues');
+// Issues (insider + client tokens)
+export const getIssuesByProject = (projectId: number, tokenId?: string) =>
+  api<Issue[]>('/projects/' + projectId + '/issues', undefined, tokenId);
 
-export const createIssue = (projectId: number, title: string, description?: string, proof?: string, priority?: IssuePriority) =>
+export const createIssue = (projectId: number, title: string, description?: string, proof?: string, priority?: IssuePriority, tokenId?: string) =>
   api<Issue>('/projects/' + projectId + '/issues', {
     method: 'POST',
     body: JSON.stringify({ title, description, proof, priority }),
-  });
+  }, tokenId);
 
-export const getIssueById = (issueId: number) =>
-  api<Issue>('/issues/' + issueId);
+export const getIssueById = (issueId: number, tokenId?: string) =>
+  api<Issue>('/issues/' + issueId, undefined, tokenId);
 
 // Issue Comments
-export const getIssueComments = (issueId: number) =>
-  api<IssueComment[]>('/issues/' + issueId + '/comments');
+export const getIssueComments = (issueId: number, tokenId?: string) =>
+  api<IssueComment[]>('/issues/' + issueId + '/comments', undefined, tokenId);
 
-export const createIssueComment = (issueId: number, content: string) =>
+export const createIssueComment = (issueId: number, content: string, tokenId?: string) =>
   api<IssueComment>('/issues/' + issueId + '/comments', {
     method: 'POST',
     body: JSON.stringify({ content }),
-  });
+  }, tokenId);
 
 // Issue Tags
-export const getIssueTags = (issueId: number) =>
-  api<IssueTag[]>('/issues/' + issueId + '/tags');
+export const getIssueTags = (issueId: number, tokenId?: string) =>
+  api<IssueTag[]>('/issues/' + issueId + '/tags', undefined, tokenId);
 
-export const createIssueTag = (issueId: number, name: string, tagTypeId: number) =>
+export const createIssueTag = (issueId: number, name: string, tagTypeId: number, tokenId?: string) =>
   api<IssueTag>('/issues/' + issueId + '/tags', {
     method: 'POST',
     body: JSON.stringify({ name, tagTypeId }),
-  });
+  }, tokenId);
 
-export const deleteIssueTag = (tagId: number) =>
-  api<void>('/issue-tags/' + tagId, { method: 'DELETE' });
+export const deleteIssueTag = (tagId: number, tokenId?: string) =>
+  api<void>('/issue-tags/' + tagId, { method: 'DELETE' }, tokenId);
 
 // Tag Types
-export const getTagTypes = () =>
-  api<TagType[]>('/tag-types');
+export const getTagTypes = (tokenId?: string) =>
+  api<TagType[]>('/tag-types', undefined, tokenId);
 
-export const createTagType = (name: string) =>
+export const createTagType = (name: string, tokenId?: string) =>
   api<TagType>('/tag-types', {
     method: 'POST',
     body: JSON.stringify({ name }),
-  });
+  }, tokenId);
 
 // Resolutions (Supervisor only)
-export const createResolution = (issueId: number, title: string, description?: string, proof?: string) =>
+export const createResolution = (issueId: number, title: string, description?: string, proof?: string, tokenId?: string) =>
   api<Resolution>('/issues/' + issueId + '/resolution', {
     method: 'POST',
     body: JSON.stringify({ title, description, proof }),
-  });
+  }, tokenId);
 
-export const getResolution = (issueId: number) =>
-  api<Resolution | null>('/issues/' + issueId + '/resolution');
+export const getResolution = (issueId: number, tokenId?: string) =>
+  api<Resolution | null>('/issues/' + issueId + '/resolution', undefined, tokenId);
 
-// Issue token routes (client)
-export const tokenGetIssuesByProject = (tokenId: string, projectId: number) =>
-  tokenApi<Issue[]>('/projects/' + projectId + '/issues', tokenId);
+// Issue Transactions (insiders only stamp)
+export const getIssueTransactions = (issueId: number, tokenId?: string) =>
+  api<IssueTransaction[]>('/issues/' + issueId + '/transactions', undefined, tokenId);
 
-export const tokenGetIssueById = (tokenId: string, issueId: number) =>
-  tokenApi<Issue>('/issues/' + issueId, tokenId);
-
-export const tokenCreateIssue = (tokenId: string, projectId: number, title: string, description?: string, proof?: string, priority?: IssuePriority) =>
-  tokenApi<Issue>('/projects/' + projectId + '/issues', tokenId, {
+export const createIssueTransaction = (issueId: number, action: IssueAction, tokenId?: string) =>
+  api<IssueTransaction>('/issues/' + issueId + '/transactions', {
     method: 'POST',
-    body: JSON.stringify({ title, description, proof, priority }),
-  });
+    body: JSON.stringify({ action }),
+  }, tokenId);
 
-export const tokenGetIssueComments = (tokenId: string, issueId: number) =>
-  tokenApi<IssueComment[]>('/issues/' + issueId + '/comments', tokenId);
+// Resolution Transactions (client tokens only stamp)
+export const getResolutionTransactions = (resolutionId: number, tokenId?: string) =>
+  api<ResolutionTransaction[]>('/resolutions/' + resolutionId + '/transactions', undefined, tokenId);
 
-export const tokenCreateIssueComment = (tokenId: string, issueId: number, content: string) =>
-  tokenApi<IssueComment>('/issues/' + issueId + '/comments', tokenId, {
+export const createResolutionTransaction = (resolutionId: number, action: ResolutionAction, tokenId?: string) =>
+  api<ResolutionTransaction>('/resolutions/' + resolutionId + '/transactions', {
     method: 'POST',
-    body: JSON.stringify({ content }),
-  });
-
-export const tokenGetIssueTags = (tokenId: string, issueId: number) =>
-  tokenApi<IssueTag[]>('/issues/' + issueId + '/tags', tokenId);
-
-export const tokenGetResolution = (tokenId: string, issueId: number) =>
-  tokenApi<Resolution | null>('/issues/' + issueId + '/resolution', tokenId);
+    body: JSON.stringify({ action }),
+  }, tokenId);
 
 export const uploadImage = async (file: File): Promise<{ url: string }> => {
   const formData = new FormData();
@@ -370,79 +400,27 @@ export const uploadImage = async (file: File): Promise<{ url: string }> => {
 };
 
 // Project Log
-export const getProjectLog = (projectId: number) =>
-  api<ProjectLog>('/projects/' + projectId + '/log');
+export const getProjectLog = (projectId: number, tokenId?: string) =>
+  api<ProjectLog>('/projects/' + projectId + '/log', undefined, tokenId);
 
-export const getProjectUsers = (projectId: number) =>
-  api<User[]>('/projects/' + projectId + '/users');
+export const getProjectUsers = (projectId: number, tokenId?: string) =>
+  api<User[]>('/projects/' + projectId + '/users', undefined, tokenId);
 
-export const setProjectLog = (projectId: number, content: string) =>
+export const setProjectLog = (projectId: number, content: string, tokenId?: string) =>
   api<ProjectLog>('/projects/' + projectId + '/log', {
     method: 'POST',
     body: JSON.stringify({ content }),
-  });
+  }, tokenId);
 
 // Phase Log
-export const getPhaseLog = (phaseId: number) =>
-  api<PhaseLog>('/phases/' + phaseId + '/log');
+export const getPhaseLog = (phaseId: number, tokenId?: string) =>
+  api<PhaseLog>('/phases/' + phaseId + '/log', undefined, tokenId);
 
-export const setPhaseLog = (phaseId: number, content: string) =>
+export const setPhaseLog = (phaseId: number, content: string, tokenId?: string) =>
   api<PhaseLog>('/phases/' + phaseId + '/log', {
     method: 'POST',
     body: JSON.stringify({ content }),
-  });
-
-// ---- Client token API (prefix /token/) ----
-const TOKEN_BASE = '/api/token';
-
-async function tokenApi<T>(url: string, tokenId: string, options?: RequestInit): Promise<T> {
-  const fullUrl = `${TOKEN_BASE}/${tokenId}${url}`;
-  console.log("[tokenApi] fetching:", fullUrl);
-  // Spread options FIRST so explicit defaults always win — prevents
-  // options.headers from clobbering Content-Type and ensures credentials
-  // stays 'include' even if a caller accidentally passes credentials.
-  const res = await fetch(fullUrl, {
-    ...options,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    console.error(`[tokenApi] FAILED ${res.status} req=${fullUrl} resUrl=${res.url}`, err);
-    throw new Error(`${err.error || `HTTP ${res.status}`} [url: ${fullUrl}, final: ${res.url}]`);
-  }
-  return res.json();
-}
-
-export const tokenGetProjects = (tokenId: string) =>
-  tokenApi<Project[]>('/projects', tokenId);
-
-export const tokenGetProject = (tokenId: string, projectId: number) =>
-  tokenApi<Project[]>('/projects/' + projectId, tokenId);
-
-export const tokenGetPhasesByProject = (tokenId: string, projectId: number) =>
-  tokenApi<Phase[]>('/projects/' + projectId + '/phases', tokenId);
-
-export const tokenGetTasksByProject = (tokenId: string, projectId: number) =>
-  tokenApi<Task[]>('/projects/' + projectId + '/tasks', tokenId);
-
-export const tokenGetTasksByPhase = (tokenId: string, phaseId: number) =>
-  tokenApi<Task[]>('/phases/' + phaseId + '/tasks', tokenId);
-
-export const tokenGetTagsByProject = (tokenId: string, projectId: number) =>
-  tokenApi<Tag[]>('/projects/' + projectId + '/tags', tokenId);
-
-export const tokenGetTagsByTask = (tokenId: string, taskId: number) =>
-  tokenApi<Tag[]>('/tasks/' + taskId + '/tags', tokenId);
-
-export const tokenGetProjectLog = (tokenId: string, projectId: number) =>
-  tokenApi<ProjectLog>('/projects/' + projectId + '/log', tokenId);
-
-export const tokenGetProjectUsers = (tokenId: string, projectId: number) =>
-  tokenApi<User[]>('/projects/' + projectId + '/users', tokenId);
-
-export const tokenGetPhaseLog = (tokenId: string, phaseId: number) =>
-  tokenApi<PhaseLog>('/phases/' + phaseId + '/log', tokenId);
+  }, tokenId);
 
 // Admin
 export const getUsers = () =>
@@ -468,6 +446,25 @@ export const setUserRole = (userId: number, role: Role) =>
 
 export const deleteUser = (userId: number) =>
   api<User[]>('/admin/users/' + userId, { method: 'DELETE' });
+
+// Multi-role management
+export const getUserById = (userId: number) =>
+  api<User>('/admin/users/' + userId);
+
+export const getInsiderUserById = (userId: number) =>
+  api<User>('/users/' + userId);
+
+export const getUserRoles = (userId: number) =>
+  api<string[]>('/admin/users/' + userId + '/roles');
+
+export const addUserRole = (userId: number, role: string) =>
+  api<{ id: number; userId: number; role: string }>('/admin/users/' + userId + '/roles', {
+    method: 'POST',
+    body: JSON.stringify({ role }),
+  });
+
+export const removeUserRole = (userId: number, role: string) =>
+  api<{ ok: boolean }>('/admin/users/' + userId + '/roles/' + encodeURIComponent(role), { method: 'DELETE' });
 
 // OTP
 export const verifyOTP = (email: string, otp: string) =>

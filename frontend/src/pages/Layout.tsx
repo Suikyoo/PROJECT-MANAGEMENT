@@ -1,9 +1,9 @@
 // ~/src/pages/Layout.tsx
-import { JSX, Show, For, createSignal, createMemo, createEffect } from 'solid-js';
+import { JSX, Show, For, createSignal, createMemo, createEffect, onMount } from 'solid-js';
 import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
-import { getProjects, logout, tokenGetProjects, type Project } from '../lib/fetch';
-import { session, setSession, getProjectById } from '../lib/store';
+import { getProjects, logout, type Project } from '../lib/fetch';
+import { session, setSession, getProjectById, refetchSession } from '../lib/store';
 import { LayoutDashboard, Columns, List, Search, ChevronLeft, ChevronRight, ChevronDown, Plus, Settings, Activity, LogOut, ChartNoAxesGantt, User } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
 
@@ -11,16 +11,12 @@ export default function Layout(props: { children?: JSX.Element }) {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
 
   const [searchQuery, setSearchQuery] = createSignal('');
   const [sidebarExpanded, setSidebarExpanded] = createSignal(true);
   const [projectsExpanded, setProjectsExpanded] = createSignal(true);
 
-  const [projects] = createResource<Project[]>(() =>
-    isClientMode() ? tokenGetProjects(tokenId()) : getProjects()
-  );
+  const [projects] = createResource<Project[]>(() => getProjects(params.token_id));
   const firstProjectId = createMemo(() => projects()?.[0]?.id);
 
   const activeProject = () => {
@@ -37,8 +33,8 @@ export default function Layout(props: { children?: JSX.Element }) {
     navigate('/login');
   };
 
-  // Insider auth guard
-  if (!isClientMode()) {
+  // Insider auth guard — only for non-client routes
+  if (!params.token_id) {
     let hasSession = false;
     try { hasSession = !!session(); } catch { /* session errored (e.g. getMe 401) */ }
     if (!hasSession) {
@@ -47,7 +43,9 @@ export default function Layout(props: { children?: JSX.Element }) {
     }
   }
 
-  const basePath = () => isClientMode() ? `/client/${tokenId()}` : '/insider';
+  onMount( async() => await refetchSession());
+  ;
+  const basePath = () => params.token_id ? `/client/${params.token_id}` : '/insider';
 
   // Page transition animation — re-triggers on route change
   let contentRef!: HTMLDivElement;
@@ -222,7 +220,7 @@ export default function Layout(props: { children?: JSX.Element }) {
           </Show>
 
           {/* User Footer — insider only */}
-          <Show when={!isClientMode()}>
+          <Show when={!params.token_id}>
             <div class={`flex items-center gap-2.5 ${sidebarExpanded() ? 'px-2.5 py-1.5' : 'justify-center py-1'}`}>
               <div
                 class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold text-white"
@@ -247,7 +245,7 @@ export default function Layout(props: { children?: JSX.Element }) {
           </Show>
 
           {/* Collapsed user links */}
-          <Show when={!isClientMode() && !sidebarExpanded()}>
+          <Show when={!params.token_id && !sidebarExpanded()}>
             <A
               href={`${basePath()}/user`}
               class={`flex justify-center py-1.5 rounded-md transition-colors ${

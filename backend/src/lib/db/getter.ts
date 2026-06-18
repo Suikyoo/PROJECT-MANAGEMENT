@@ -1,6 +1,6 @@
 import { eq, type InferSelectModel, inArray, and, isNotNull } from "drizzle-orm";
 import { db } from "./index.ts";
-import { phaseTable, userTable, userRoleTable, projectTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable } from "./schema.ts";
+import { phaseTable, userTable, userRoleTable, projectTable, taskTable, projectCommentTable, phaseCommentTable, projectLogTable, phaseLogTable, tokenTable, accessTable, tagTable, otpSessionTable, forgetSessionTable, issueTable, issueCommentTable, issueTagTable, tagTypeTable, resolutionTable, issueTransactionTable, resolutionTransactionTable } from "./schema.ts";
 
 export async function getProjects(): Promise<InferSelectModel<typeof projectTable>[]> {
   return await db.select().from(projectTable);
@@ -218,4 +218,12 @@ export async function getTagTypes(): Promise<InferSelectModel<typeof tagTypeTabl
 export async function getResolutionByIssueId(issueId: number): Promise<InferSelectModel<typeof resolutionTable> | undefined> {
   const result = await db.select().from(resolutionTable).where(eq(resolutionTable.issueId, issueId));
   return result[0];
+}
+
+export async function getIssueTransactionsByIssueId(issueId: number): Promise<InferSelectModel<typeof issueTransactionTable>[]> {
+  return await db.select().from(issueTransactionTable).where(eq(issueTransactionTable.issueId, issueId)).orderBy(issueTransactionTable.createdAt);
+}
+
+export async function getResolutionTransactionsByResolutionId(resolutionId: number): Promise<InferSelectModel<typeof resolutionTransactionTable>[]> {
+  return await db.select().from(resolutionTransactionTable).where(eq(resolutionTransactionTable.resolutionId, resolutionId)).orderBy(resolutionTransactionTable.createdAt);
 }

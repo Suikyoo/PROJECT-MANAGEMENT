@@ -4,7 +4,6 @@ import { Show, createSignal, createEffect, createMemo } from 'solid-js';
 import { useParams, useNavigate } from '@solidjs/router';
 import {
   getTasksByProject, getTagsByTask, acceptTask, submitTask, approveTask,
-  tokenGetTasksByProject, tokenGetTagsByTask,
   type Task, type Tag,
 } from '../lib/fetch';
 import { session } from '../lib/store';
@@ -13,8 +12,6 @@ import TaskDetailPanel from '../components/TaskDetailPanel';
 export default function TaskView() {
   const params = useParams();
   const navigate = useNavigate();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
   const projectId = () => Number(params.project_id);
   const taskId = () => Number(params.task_id);
 
@@ -30,9 +27,7 @@ export default function TaskView() {
     if (isNaN(pid) || pid <= 0) return;
     setTasksLoading(true);
     try {
-      const result = isClientMode()
-        ? await tokenGetTasksByProject(tokenId(), pid)
-        : await getTasksByProject(pid);
+      const result = await getTasksByProject(pid, params.token_id);
       setAllTasks(result);
     } catch {
       // silent
@@ -50,9 +45,7 @@ export default function TaskView() {
     if (isNaN(tid) || tid <= 0) return;
     setTagsLoading(true);
     try {
-      const result = isClientMode()
-        ? await tokenGetTagsByTask(tokenId(), tid)
-        : await getTagsByTask(tid);
+      const result = await getTagsByTask(tid, params.token_id);
       setTags(result as Tag[]);
     } catch {
       // silent
@@ -71,12 +64,12 @@ export default function TaskView() {
   });
 
   const userRoles = createMemo(() => {
-    if (isClientMode()) return [] as string[];
+    if (params.token_id) return [] as string[];
     try { return session()?.roles || []; } catch { return [] as string[]; }
   });
 
   const backUrl = () => {
-    if (isClientMode()) return `/client/${tokenId()}/project/${projectId()}`;
+    if (params.token_id) return `/client/${params.token_id}/project/${projectId()}`;
     return `/insider/project/${projectId()}`;
   };
 
@@ -123,7 +116,6 @@ export default function TaskView() {
           onClose={handleClose}
           onModified={handleModified}
           roles={userRoles()}
-          isClientMode={isClientMode()}
           isSupervisor={userRoles().includes('Supervisor')}
           onAccept={async (id) => { await acceptTask(id); }}
           onSubmit={async (id) => { await submitTask(id); }}

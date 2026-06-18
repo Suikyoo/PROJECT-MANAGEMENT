@@ -1,14 +1,12 @@
 import { useParams, A } from '@solidjs/router';
 import { createSignal, createEffect, For, Show } from 'solid-js';
-import { getIssuesByProject, tokenGetIssuesByProject, createIssue, tokenCreateIssue, type Issue } from '../lib/fetch';
+import { getIssuesByProject, createIssue, type Issue } from '../lib/fetch';
 import { currentUser } from '../lib/store';
 
 type Priority = 'low' | 'medium' | 'high' | 'critical';
 
 export default function IssueList() {
   const params = useParams();
-  const isClientMode = () => !!params.token_id;
-  const tokenId = () => params.token_id!;
   const projectId = () => Number(params.project_id);
   
   const [issues, setIssues] = createSignal<Issue[]>([]);
@@ -26,10 +24,9 @@ export default function IssueList() {
   const loadIssues = async () => {
     setLoading(true);
     try {
-      const result = isClientMode()
-        ? await tokenGetIssuesByProject(tokenId(), projectId())
-        : await getIssuesByProject(projectId());
-      setIssues(result);
+      const result = await getIssuesByProject(projectId(), params.token_id);
+      // sort the issues with unresolved issues at the top(beginning)
+      setIssues(result.toSorted(issue => issue.resolutionId || -1));
     } catch (e) { /* ignore */ }
     setLoading(false);
   };
@@ -40,11 +37,7 @@ export default function IssueList() {
     setCreateLoading(true);
     setCreateError('');
     try {
-      if (isClientMode()) {
-        await tokenCreateIssue(tokenId(), projectId(), newTitle().trim(), newDesc().trim() || undefined, newProof().trim() || undefined, newPriority());
-      } else {
-        await createIssue(projectId(), newTitle().trim(), newDesc().trim() || undefined, newProof().trim() || undefined, newPriority());
-      }
+      await createIssue(projectId(), newTitle().trim(), newDesc().trim() || undefined, newProof().trim() || undefined, newPriority(), params.token_id);
       setShowCreate(false);
       setNewTitle('');
       setNewDesc('');
@@ -59,12 +52,12 @@ export default function IssueList() {
 
   createEffect(() => { if (projectId()) loadIssues(); });
 
-  const backUrl = isClientMode() 
-    ? `/client/${tokenId()}/project/${projectId()}`
+  const backUrl = params.token_id
+    ? `/client/${params.token_id}/project/${projectId()}`
     : `/insider/project/${projectId()}`;
 
-  const issueUrl = (issueId: number) => isClientMode()
-    ? `/client/${tokenId()}/project/${projectId()}/issues/${issueId}`
+  const issueUrl = (issueId: number) => params.token_id
+    ? `/client/${params.token_id}/project/${projectId()}/issues/${issueId}`
     : `/insider/project/${projectId()}/issues/${issueId}`;
 
   const priorityColor = (p: string) => {
@@ -78,7 +71,9 @@ export default function IssueList() {
   };
 
   return (
-    <div class="max-w-4xl mx-auto px-4 py-6">
+    <div class="h-full flex flex-col max-w-4xl mx-auto px-4 py-6">
+      <div class="flex-1 overflow-y-auto">
+
       {/* Back link */}
       <A href={backUrl} class="text-zinc-500 hover:text-zinc-300 text-xs mb-4 inline-block transition-colors">
         ← Back to Project
@@ -118,15 +113,17 @@ export default function IssueList() {
                 <p class="text-[11px] text-zinc-500 mt-1 line-clamp-1">{issue.description}</p>
               )}
               <div class="flex items-center gap-2 mt-2">
-                <span class="text-[10px] text-zinc-600">
-                  {issue.authorName || (issue.userId ? `User #${issue.userId}` : 'Anonymous')}
-                </span>
+                <Show when={issue.userId && issue.userId > 0} fallback={<span class="text-[10px] text-zinc-600">{issue.authorName || 'Anonymous'}</span>}>
+                  <A href={`/insider/users/${issue.userId}`} class="text-[10px] text-blue-400 hover:underline">{issue.authorName}</A>
+                </Show>
                 <span class="text-[10px] text-zinc-700">·</span>
                 <span class="text-[10px] text-zinc-600">{new Date(issue.createdAt).toLocaleString()}</span>
               </div>
             </div>
           </A>
         )}</For>
+      </div>
+
       </div>
 
       {/* Create Issue Modal */}

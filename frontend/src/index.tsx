@@ -13,6 +13,7 @@ import IssueList from './pages/IssueList';
 import IssueView from './pages/IssueView';
 import AdminLogin from './pages/AdminLogin';
 import AdminPage from './pages/AdminPage';
+import AdminUserView from './pages/AdminUserView';
 import "./index.css"
 import ProjectLayout from './pages/ProjectLayout';
 import UserView from './pages/UserView';
@@ -39,6 +40,7 @@ render(
       <Route path="/insider" component={Layout}>
         <Route path="/" component={Projects} />
         <Route path="/user" component={UserView} />
+        <Route path="/users/:id" component={UserView} />
         <Route path="/project/:project_id" component={ProjectLayout} >
           <Route path="/" component={DashBoardView} />
           <Route path="/tasks" component={ProjectView} />
@@ -52,6 +54,7 @@ render(
       <Route path="/admin">
         <Route path="/" component={AdminLogin} />
         <Route path="/dashboard" component={AdminPage} />
+        <Route path="/user/:id" component={AdminUserView} />
       </Route>
     </Router>
   ),
