@@ -62,9 +62,9 @@ function buildEmailHtml(stats: Awaited<ReturnType<typeof computeUrgency>>): stri
 
   const urgencyBadge = (u: string) => {
     switch (u) {
-      case "missed": return `<span style="background:#9f1239;color:#fda4af;padding:2px 8px;border-radius:4px;font-size:11px">Overdue</span>`;
-      case "urgent": return `<span style="background:#78350f;color:#fde68a;padding:2px 8px;border-radius:4px;font-size:11px">Due Today</span>`;
-      case "upcoming": return `<span style="background:#155e75;color:#67e8f9;padding:2px 8px;border-radius:4px;font-size:11px">Upcoming</span>`;
+      case "missed": return `<span style="background:#FF3B3B;color:#ffffff;padding:2px 8px;border-radius:4px;font-size:11px">Overdue</span>`;
+      case "urgent": return `<span style="background:#00D4FF;color:#0A0A0B;padding:2px 8px;border-radius:4px;font-size:11px">Due Today</span>`;
+      case "upcoming": return `<span style="background:#00E83C;color:#0A0A0B;padding:2px 8px;border-radius:4px;font-size:11px">Upcoming</span>`;
     }
   };
 
@@ -102,15 +102,15 @@ function buildEmailHtml(stats: Awaited<ReturnType<typeof computeUrgency>>): stri
     <div style="padding:24px">
       <div style="display:flex;gap:16px;margin-bottom:24px">
         <div style="flex:1;background:#121214;border:1px solid #1f1f23;border-radius:6px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#${stats.missed > 0 ? 'e11d48' : '22c55e'}">${stats.missed}</div>
+          <div style="font-size:28px;font-weight:700;color:#${stats.missed > 0 ? 'FF3B3B' : '00E83C'}">${stats.missed}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">Overdue</div>
         </div>
         <div style="flex:1;background:#121214;border:1px solid #1f1f23;border-radius:6px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#f59e0b">${stats.urgentToday}</div>
+          <div style="font-size:28px;font-weight:700;color:#00D4FF">${stats.urgentToday}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">Due Today</div>
         </div>
         <div style="flex:1;background:#121214;border:1px solid #1f1f23;border-radius:6px;padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#06b6d4">${stats.upcoming}</div>
+          <div style="font-size:28px;font-weight:700;color:#00E83C">${stats.upcoming}</div>
           <div style="font-size:11px;color:#71717a;margin-top:4px">Upcoming</div>
         </div>
         <div style="flex:1;background:#121214;border:1px solid #1f1f23;border-radius:6px;padding:16px;text-align:center">

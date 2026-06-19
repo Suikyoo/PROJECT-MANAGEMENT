@@ -17,7 +17,7 @@ export default function ProjectLayout({children}: {children?: JSX.Element}) {
   }
 
   return (
-    <div class="h-full overflow-y-scroll flex flex-col">
+    <div class="h-screen overflow-y-scroll flex flex-col">
         {children}
     </div>
   );

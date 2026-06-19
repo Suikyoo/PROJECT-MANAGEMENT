@@ -3,24 +3,20 @@ import { For, Show, createSignal, createEffect, createMemo, untrack } from 'soli
 import { useParams, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByProject, togglePhaseState,
-  getProjectLog, setProjectLog, getProjectComments, createProjectComment, uploadImage,
+  getProjectComments, createProjectComment,
   getProjectUsers,
   acceptTask, submitTask, approveTask,
   getTagsByTask, createTag, deleteTag,
   getIssuesByProject,
   type Phase, type Task, type Tag, type User,
   type Issue,
-  ProjectLog, ProjectComment
+  ProjectComment
 } from '../lib/fetch';
 import { session, currentUser, getProjectById } from '../lib/store';
 import { nameToColor } from '../lib/misc';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import UrgencyPanel from '../components/UrgencyPanel';
-import { Editor } from '@tiptap/core';
-import { StarterKit } from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
-import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon, ChevronDown, ChevronRight } from 'lucide-solid';
-import FileHandler from '@tiptap/extension-file-handler';
+import { ChevronDown, ChevronRight } from 'lucide-solid';
 
 export default function DashBoardView() {
   const params = useParams();
@@ -35,15 +31,7 @@ export default function DashBoardView() {
   const [allTasks, setAllTasks] = createSignal<Task[] | undefined>(undefined);
   const [tasksLoading, setTasksLoading] = createSignal(true);
 
-  const [initialLogContent, setInitialLogContent] = createSignal<ProjectLog | { projectId: number; content: string } | undefined>(undefined);
-  const [logLoading, setLogLoading] = createSignal(true);
-  const [logError, setLogError] = createSignal<string | undefined>(undefined);
-  const refetchInitialLog = () => loadLog();
-
-  const [logContent, setLogContent] = createSignal<ProjectLog | { projectId: number; content: string } | undefined>(undefined);
-  const [logContentLoading, setLogContentLoading] = createSignal(false);
-  const mutateLog = (fn: (prev: ProjectLog | { projectId: number; content: string } | undefined) => ProjectLog | { projectId: number; content: string } | undefined) => setLogContent(fn(logContent()));
-  const refetchLog = () => loadLog();
+  const [error, setError] = createSignal('');
 
   let loadPhasesReqId = 0;
   let loadPhasesRunning = false;
@@ -84,25 +72,6 @@ export default function DashBoardView() {
     }
   };
 
-  const loadLog = async () => {
-    const pid = projectId();
-    if (isNaN(pid) || pid <= 0) return;
-    setLogLoading(true);
-    setLogError(undefined);
-    try {
-      const res = await getProjectLog(pid, params.token_id);
-      setInitialLogContent('error' in res ? { projectId: pid, content: '' } : res);
-    } catch (err: any) {
-      const msg = err?.message || String(err);
-      setLogError(msg.includes('Unauthorized') || msg.includes('401') || msg.includes('403')
-        ? `Access denied for project log (#${pid}).`
-        : `Failed to load log: ${msg}`);
-      setInitialLogContent({ projectId: pid, content: '' });
-    } finally {
-      setLogLoading(false);
-    }
-  };
-
   // Trigger data loading reactively when route params resolve
   createEffect(() => {
     const pid = projectId();
@@ -110,7 +79,6 @@ export default function DashBoardView() {
     if (!isNaN(pid) && pid > 0) {
       loadPhases();
       loadTasks();
-      loadLog();
       loadComments();
       loadProjectUsers();
     } else {
@@ -127,15 +95,6 @@ export default function DashBoardView() {
       return next;
     });
   };
-
-  const [error, setError] = createSignal('');
-
-  const [editor_ref, setEditorRef] = createSignal<HTMLDivElement>();
-  const [editor, setEditor] = createSignal<Editor>();
-
-  const [logSaving, setLogSaving] = createSignal(false);
-  const [showEditLog, setShowEditLog] = createSignal(false);
-  const [showViewLog, setShowViewLog] = createSignal(false);
 
   // Session is only relevant in insider mode; in client mode, skip session() entirely
   // to avoid getMe() errors (e.g. "Meh not found") contaminating other signal handlers.
@@ -223,81 +182,6 @@ export default function DashBoardView() {
       : name.slice(0, 2).toUpperCase();
   };
 
-  // Create editor when element is available and edit modal is open
-  createEffect(() => {
-    const el = editor_ref();
-    if (!el || !showEditLog()) {
-      if (editor()) {
-        editor()?.destroy();
-        setEditor(undefined);
-      }
-      return;
-    }
-
-    const instance = new Editor({
-      element: el,
-      editable: true,
-      extensions: [
-        StarterKit,
-        Image.configure({ allowBase64: true }),
-        FileHandler.configure({
-          allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
-          onDrop: (currentEditor: Editor, files: Blob[], pos) => {
-            files.forEach(file => {
-              const fileReader = new FileReader()
-              fileReader.readAsDataURL(file)
-              fileReader.onload = () => {
-                currentEditor
-                  .chain()
-                  .insertContentAt(pos, {
-                    type: 'image',
-                    attrs: { src: fileReader.result },
-                  })
-                  .focus()
-                  .run()
-              }
-            })
-          },
-          onPaste: (currentEditor: Editor, files: File[], pasteContent: string|undefined) => {
-            files.forEach(file => {
-              if (pasteContent) {
-                return false
-              }
-              const fileReader = new FileReader()
-              fileReader.readAsDataURL(file)
-              fileReader.onload = () => {
-                currentEditor
-                  .chain()
-                  .insertContentAt(currentEditor.state.selection.anchor, {
-                    type: 'image',
-                    attrs: { src: fileReader.result },
-                  })
-                  .focus()
-                  .run()
-              }
-            })
-          },
-        }),
-      ],
-      injectCSS: true,
-      onUpdate: ({ editor }: {editor: Editor}) => {
-        mutateLog((projectLog) => {
-          return {...projectLog, content: editor.getHTML()} as ProjectLog
-        });
-      },
-    });
-
-    setEditor(instance);
-  });
-
-  // Set initial content when a new editor instance is created
-  createEffect(() => {
-    if (editor()) {
-      const content = untrack(() => initialLogContent()?.content);
-      editor()?.commands.setContent(content || "")
-    }
-  });
-
   const handleTogglePhase = async (phaseId: number) => {
     try {
       await togglePhaseState(phaseId, params.token_id);
@@ -305,22 +189,6 @@ export default function DashBoardView() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed');
     }
-  };
-
-  const handleSaveLog = async () => {
-    if (params.token_id) return;
-    setLogSaving(true);
-    try {
-      console.log(logContent()?.content);
-      await setProjectLog(projectId(), logContent()?.content || "", params.token_id);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save log');
-    } finally {
-      setLogSaving(false);
-    }
-    await refetchLog();
-    await refetchInitialLog();
-    setShowEditLog(false);
   };
 
   // --- Project Comments ---
@@ -406,6 +274,10 @@ export default function DashBoardView() {
   const issuesUrl = () => params.token_id
     ? `/client/${params.token_id}/project/${projectId()}/issues`
     : `/insider/project/${projectId()}/issues`;
+
+  const logUrl = () => params.token_id
+    ? `/client/${params.token_id}/project/${projectId()}/log`
+    : `/insider/project/${projectId()}/log`;
 
   return (
     <div class="flex flex-col">
@@ -495,29 +367,16 @@ export default function DashBoardView() {
         <div class="max-w-5xl mx-auto w-full p-5">
       <Show when={error()}><div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{error()}<button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button></div></Show>
 
-      {/* Project Log — compact card */}
-      <Show when={logError()}>
-        <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">
-          Log failed to load: {logError()}
+      {/* Project Log — button link to dedicated page */}
+      <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-5 px-3 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-accent-teal" />
+          <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Project Log</span>
         </div>
-      </Show>
-      <Show when={!logLoading() && !logError()} fallback={<Show when={logLoading()}><p class="text-zinc-500 text-xs p-3">Loading log...</p></Show>}>
-        <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-5">
-          <div class="flex items-center justify-between px-3 py-2 border-b border-[#1F1F23]">
-            <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Project Log</h3>
-            <div class="flex gap-1.5">
-              <button onClick={() => setShowViewLog(true)} class="bg-[#1F1F23] hover:bg-[#27272A] text-zinc-400 hover:text-zinc-200 text-[10px] px-3 py-1.5 rounded-md cursor-pointer transition-colors border border-[#27272A]">View</button>
-              <Show when={canEditLog()}>
-                <button onClick={() => setShowEditLog(true)} class="bg-white text-black font-medium text-[10px] px-3 py-1.5 rounded-md cursor-pointer hover:bg-zinc-200 transition-colors">Edit</button>
-              </Show>
-            </div>
-          </div>
-          <div class="relative max-h-[180px] overflow-y-hidden p-3">
-            <div class="prose prose-invert prose-sm max-w-none text-zinc-300 text-[12px] leading-relaxed [&_img]:rounded-md [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={initialLogContent()?.content || '<p class="text-zinc-600 italic text-[11px]">No content yet.</p>'} />
-            <div class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#121214] to-transparent pointer-events-none" />
-          </div>
-        </div>
-      </Show>
+        <A href={logUrl()} class="bg-white text-black font-medium text-[10px] px-3 py-1.5 rounded-md cursor-pointer hover:bg-zinc-200 transition-colors no-underline">
+          View Log
+        </A>
+      </div>
 
       {/* Issues Snippet */}
       <div class="bg-[#121214] border border-[#1F1F23] rounded-lg mb-5 px-3 py-2.5 flex items-center justify-between">
@@ -714,64 +573,6 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
           </button>
         </form>
       </div>
-      </Show>
-
-      {/* EDIT LOG MODAL */}
-      <Show when={showEditLog()}>
-        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowEditLog(false)}>
-          <div class="bg-[#121214] border border-[#1F1F23] p-5 rounded-lg w-full max-w-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 class="text-base font-semibold text-white mb-3">Edit Project Log</h3>
-            <Show when={editor()}>
-              <div class="flex gap-1 mb-2 p-1.5 border border-[#27272A] rounded-md bg-[#0B0B0C] flex-wrap">
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('bold') }} onClick={() => editor()?.chain().toggleBold().focus().run()} title="Bold"><Bold size={14} /></button>
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('italic') }} onClick={() => editor()?.chain().toggleItalic().focus().run()} title="Italic"><Italic size={14} /></button>
-                <span class="w-px bg-[#27272A] mx-0.5" />
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 1 }) }} onClick={() => editor()?.chain().toggleHeading({ level: 1 }).focus().run()} title="Heading 1"><Heading1 size={14} /></button>
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 2 }) }} onClick={() => editor()?.chain().toggleHeading({ level: 2 }).focus().run()} title="Heading 2"><Heading2 size={14} /></button>
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" classList={{ 'bg-[#1F1F23] text-white': editor()?.isActive('heading', { level: 3 }) }} onClick={() => editor()?.chain().toggleHeading({ level: 3 }).focus().run()} title="Heading 3"><Heading3 size={14} /></button>
-                <span class="w-px bg-[#27272A] mx-0.5" />
-                <button type="button" class="p-1.5 text-zinc-400 rounded hover:bg-[#1F1F23] hover:text-white" onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = async () => {
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    try {
-                      const result = await uploadImage(file);
-                      editor()?.chain().setImage({ src: result.url }).focus().run();
-                    } catch {
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        editor()?.chain().setImage({ src: reader.result as string }).focus().run();
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  };
-                  input.click();
-                }} title="Insert Image"><ImageIcon size={14} /></button>
-              </div>
-            </Show>
-            <div id="editor" ref={setEditorRef} class="border border-[#27272A] rounded-md p-3 bg-[#0B0B0C] text-white min-h-[200px] max-h-[400px] overflow-y-auto text-[13px]"/>
-            <div class="flex gap-2 justify-end mt-3">
-              <button type="button" onClick={() => setShowEditLog(false)} class="text-zinc-400 hover:text-white text-[12px] px-3 py-1.5 rounded-md cursor-pointer transition-colors">Cancel</button>
-              <button type="button" onClick={handleSaveLog} disabled={logSaving()} class="bg-white text-black font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer hover:bg-zinc-200 disabled:opacity-50 transition-colors">{logSaving() ? 'Saving...' : 'Save'}</button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      {/* VIEW LOG MODAL */}
-      <Show when={showViewLog()}>
-        <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowViewLog(false)}>
-          <div class="bg-[#121214] border border-[#1F1F23] p-5 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-base font-semibold text-white">Project Log</h3>
-              <button onClick={() => setShowViewLog(false)} class="text-zinc-500 hover:text-white cursor-pointer bg-transparent border-none text-lg leading-none">&times;</button>
-            </div>
-            <div class="prose prose-invert prose-sm max-w-none text-zinc-300 text-[13px] [&_img]:rounded-md [&_img]:max-w-full [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_p]:text-zinc-300 [&_strong]:text-white" innerHTML={initialLogContent()?.content || '<p class="text-zinc-500 italic text-[12px]">No content yet.</p>'} />
-          </div>
-        </div>
       </Show>
 
       {/* TASK DETAILS SLIDE-IN PANEL */}

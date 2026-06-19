@@ -7,6 +7,7 @@ import Projects from './pages/Projects';
 import InsiderLogin from './pages/InsiderLogin';
 import DashBoardView from './pages/DashBoardView';
 import ProjectView from './pages/ProjectView';
+import ProjectLogView from './pages/ProjectLogView';
 import PhaseView from './pages/PhaseView';
 import TaskView from './pages/TaskView';
 import IssueList from './pages/IssueList';
@@ -30,6 +31,7 @@ render(
         <Route path="/" component={Projects} />
         <Route path="/project/:project_id" component={ProjectLayout}>
           <Route path="/" component={DashBoardView} />
+          <Route path="/log" component={ProjectLogView} />
           <Route path="/issues" component={IssueList} />
           <Route path="/issues/:issue_id" component={IssueView} />
           <Route path="/phase/:phase_id" component={PhaseView} />
@@ -43,6 +45,7 @@ render(
         <Route path="/users/:id" component={UserView} />
         <Route path="/project/:project_id" component={ProjectLayout} >
           <Route path="/" component={DashBoardView} />
+          <Route path="/log" component={ProjectLogView} />
           <Route path="/tasks" component={ProjectView} />
           <Route path="/issues" component={IssueList} />
           <Route path="/issues/:issue_id" component={IssueView} />
