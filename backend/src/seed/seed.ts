@@ -10,7 +10,9 @@ async function seed() {
   const hash = await bcrypt.hash("password123", 10);
 
   let raw_users = [
-    { name: "Francis Roel L. Abarca", passwordHash: hash, email: "francisroelabarca12@gmail.com"}
+    { name: "Francis Roel L. Abarca", passwordHash: hash, email: "francisroelabarca12@gmail.com"},
+    { name: "Keisha Angela Canque ", passwordHash: hash, email: "k.angelacanque@gmail.com"},
+    { name: "Jude Anthony G. Sayson", passwordHash: hash, email: "judeanthony02sayson@gmail.com"}
   ]
   const users = await db.insert(userTable).values(raw_users.map(u => ({...u, approved: "approved"}))).returning();
 
