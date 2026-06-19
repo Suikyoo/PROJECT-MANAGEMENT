@@ -26,7 +26,7 @@ export default function IssueList() {
     try {
       const result = await getIssuesByProject(projectId(), params.token_id);
       // sort the issues with unresolved issues at the top(beginning)
-      setIssues(result.toSorted(issue => issue.resolved ? 1 : -1));
+      setIssues(result.toSorted(issue => issue.resolved ? 1 : -1).toReversed());
     } catch (e) { /* ignore */ }
     setLoading(false);
   };
@@ -71,8 +71,7 @@ export default function IssueList() {
   };
 
   return (
-    <div class="h-full flex flex-col max-w-4xl mx-auto px-4 py-6">
-      <div class="flex-1 overflow-y-auto">
+    <div class="flex flex-col w-full mx-auto px-4 py-6">
 
       {/* Back link */}
       <A href={backUrl} class="text-zinc-500 hover:text-zinc-300 text-xs mb-4 inline-block transition-colors">
@@ -122,8 +121,6 @@ export default function IssueList() {
             </div>
           </A>
         )}</For>
-      </div>
-
       </div>
 
       {/* Create Issue Modal */}

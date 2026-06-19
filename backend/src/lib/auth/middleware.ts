@@ -90,9 +90,11 @@ export const requireInsider: RequestHandler = (_req, res, next) => {
 
 // Guard: for token users, verify the project is in their allowed set
 // Usage: app.get("/projects/:id/tasks", authenticate, restrictProject, handler)
+// Skips check when no project ID is in route params (e.g. listing routes)
 export const restrictProject: RequestHandler = (req, res, next) => {
   if (res.locals.userId !== -1) return next(); // insider — no restriction
   const projectId = Number(req.params.id || req.params.project_id);
+  if (isNaN(projectId)) return next(); // no project ID to check — pass through
   if (!res.locals.allowedProjectIds?.includes(projectId)) {
     return res.status(403).json({ error: "Token does not have access to this project" });
   }

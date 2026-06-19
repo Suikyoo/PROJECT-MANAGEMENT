@@ -4,10 +4,10 @@ import { A } from '@solidjs/router';
 import {
   getUsers, getPendingUsers, approveUser, rejectUser, deleteUser, logout,
   getTokens, createToken, deleteToken, getTokenAccess, createTokenAccess, deleteTokenAccess,
-  getProjects,
+  getProjects, sendUrgencyEmail,
   type User, type Token, type Project, type Access,
 } from '../lib/fetch';
-import { Zap } from 'lucide-solid';
+import { Zap, Send } from 'lucide-solid';
 
 export default function AdminPage() {
   const [users, { refetch: refetchUsers }] = createResource<User[]>(getUsers);
@@ -95,6 +95,20 @@ export default function AdminPage() {
     }
   };
 
+  const [sendingUrgency, setSendingUrgency] = createSignal(false);
+  const handleSendUrgency = async () => {
+    setSendingUrgency(true);
+    try {
+      const result = await sendUrgencyEmail();
+      setError('');
+      alert(`Sent to ${result.sent} user(s)${result.errors.length ? ` — ${result.errors.length} error(s)` : ''}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to send urgency email');
+    } finally {
+      setSendingUrgency(false);
+    }
+  };
+
   const displayedUsers = () => tab() === 'pending' ? pendingUsers() || [] : users() || [];
 
   const roleBadge = (role: string) => {
@@ -132,6 +146,10 @@ export default function AdminPage() {
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-semibold text-white">Admin Panel</h1>
           <div class="flex gap-2">
+            <button onClick={handleSendUrgency} disabled={sendingUrgency()} class="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs px-4 py-2 rounded cursor-pointer transition-colors flex items-center gap-1.5">
+              <Send size={12} />
+              {sendingUrgency() ? 'Sending...' : 'Send Urgency'}
+            </button>
             <button onClick={handleDownloadBackup} class="bg-[#27272A] border border-[#3F3F46] text-zinc-300 text-xs px-4 py-2 rounded cursor-pointer hover:bg-[#3F3F46] transition-colors">📥 Backup CSV</button>
             <button onClick={() => setShowCreateToken(true)} class="bg-white text-black font-semibold text-xs px-4 py-2 rounded cursor-pointer hover:bg-zinc-200 transition-colors">+ Create Token</button>
           </div>

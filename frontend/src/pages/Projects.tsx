@@ -2,7 +2,7 @@
 import { For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
-import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, type Project, type Phase, type Task, type User } from '../lib/fetch';
+import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, getTokenName, type Project, type Phase, type Task, type User } from '../lib/fetch';
 import { session, refreshProjects } from '../lib/store';
 import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
@@ -70,10 +70,9 @@ export default function Projects() {
   });
 
   // Fetch all users (for Team Workload name mapping)
-  createResource(() => !params.token_id, async () => {
-    if (params.token_id) return;
+  createResource(async () => {
     try {
-      const users = await getAllUsers().catch(() => [] as User[]);
+      const users = await getAllUsers(params.token_id).catch(() => [] as User[]);
       setAllUsers(users);
     } catch { /* ignore */ }
   });
@@ -169,6 +168,12 @@ export default function Projects() {
   });
   const todayDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Fetch token name when visiting as a client
+  const [tokenName] = createResource(() => params.token_id ?? false, (tokenId: string | false) => {
+    if (!tokenId) return Promise.resolve<string | null>(null);
+    return getTokenName(tokenId).then(t => t.name).catch(() => null);
+  });
+
   const statCards = createMemo(() => {
     const counts = taskStateCounts();
     return [
@@ -231,7 +236,7 @@ export default function Projects() {
       {/* Greeting Header */}
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-xl font-semibold text-white">{greetingText()}, {session()?.email || 'User'}!</h1>
+          <h1 class="text-xl font-semibold text-white">{greetingText()}, {session()?.name || tokenName() || 'User'}!</h1>
           <p class="text-xs text-zinc-500 mt-1">{todayDate}</p>
         </div>
         <Show when={isSupervisor()}>

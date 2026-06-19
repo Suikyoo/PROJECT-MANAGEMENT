@@ -10,27 +10,17 @@ async function seed() {
   const hash = await bcrypt.hash("password123", 10);
 
   let raw_users = [
-    { name: "Alex Chen", passwordHash: hash, email: "alex@gmail.com"},
-    { name: "Priya Sharma", passwordHash: hash, email: "priya@gmail.com"},
-    { name: "Diana Osei", passwordHash: hash, email: "diana@gmail.com"},
-    { name: "Marcus Webb", passwordHash: hash, email: "marcus@gmail.com"},
-    { name: "Francis Roel L. Abarca", passwordHash: hash, email: "francis@gmail.com"}
+    { name: "Francis Roel L. Abarca", passwordHash: hash, email: "francisroelabarca12@gmail.com"}
   ]
   const users = await db.insert(userTable).values(raw_users.map(u => ({...u, approved: "approved"}))).returning();
 
   //add me for email testing
   //await db.insert(userTable).values([{name: "Jude Anthony G. Sayson", passwordHash: hash, role: "Supervisor", email: "judeanthony02sayson@gmail.com"}])
 
-  const [alex, priya, diana, marcus, roel] = users;
+  const [roel] = users;
 
   // Seed roles (all roles now managed via userRoleTable)
   await db.insert(userRoleTable).values([
-    { userId: alex.id, role: "Developer" },
-    { userId: alex.id, role: "QA" },
-    { userId: priya.id, role: "QA" },
-    { userId: diana.id, role: "Developer" },
-    { userId: marcus.id, role: "Supervisor" },
-    { userId: marcus.id, role: "Developer" },
     { userId: roel.id, role: "Supervisor" },
     { userId: roel.id, role: "QA" },
     { userId: roel.id, role: "Developer" },

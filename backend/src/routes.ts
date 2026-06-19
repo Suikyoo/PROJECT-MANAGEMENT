@@ -9,6 +9,7 @@ import {
   getTasksByProjectId,
   getProjectLog, getPhaseLog,
   getAllTokens, getAccessByTokenId,
+  getTokenById,
   getTagsByTaskId, getTagsByProjectId,
   getProjectUsers, getValidOtpSession, getValidForgetSession,
   getIssuesByProjectId, getIssueById, getIssueCommentsByIssueId,
@@ -32,7 +33,10 @@ import {
 } from "./lib/db/setter.ts"
 import { dumpAllTables, dumpTable } from "./lib/db/backup.ts"
 import { authenticateAdmin, authenticateUser } from "./lib/auth/index.ts";
-import { authenticate, requireRole, requireInsider, requireToken, restrictProject } from "./lib/auth/middleware.ts";
+import { authenticate, requireRole, requireInsider, requireToken, restrictProject, isValidToken } from "./lib/auth/middleware.ts";
+
+import { computeUrgency } from "./lib/notifications/urgency.ts";
+import { triggerManualSend } from "./lib/notifications/scheduler.ts";
 import { generateOTP, sendOTP, sendForgetUserEmail } from "./lib/auth/otp.ts";
 import cookieParser from "cookie-parser";
 import multer from "multer";
@@ -302,25 +306,14 @@ export function configRoutes(app: Express) {
     return res.json({ userId: u.id, email: u.email, name: u.name, role: roles[0] || 'Developer', roles });
   });
 
-  // ---- Public read routes (for client page - no auth needed) ----
-
-  app.get("/projects", async (_, res) => {
-    return res.json(await getProjects());
-  });
-
-  app.get("/projects/:id", async (req, res) => {
-    const id = Number(req.params.id);
-    return res.json(await getProjectsById(id));
-  });
-
-  app.get("/projects/:id/phases", async (req, res) => {
-    const id = Number(req.params.id);
-    return res.json(await getPhasesByProjectId(id));
-  });
-
-  app.get("/phases/:id", async (req, res) => {
-    const id = Number(req.params.id);
-    return res.json(await getPhasesById(id));
+  // Public: get token name by id (for client greeting)
+  app.get("/auth/token/me", async (req, res) => {
+    const tokenId = req.query.token_id as string;
+    if (!tokenId) return res.status(400).json({ error: "token_id required" });
+    const valid = await isValidToken(tokenId);
+    if (!valid) return res.status(401).json({ error: "Invalid or expired token" });
+    const t = await getTokenById(tokenId);
+    return res.json({ name: t?.name || "Client" });
   });
 
   app.get("/projects/:id/comments", authenticate, requireInsider, async (req, res) => {
@@ -351,9 +344,9 @@ export function configRoutes(app: Express) {
     return res.json(comment);
   });
 
-  // ---- User routes ----
+  // ---- User routes (visible to the clients also) ----
 
-  app.get("/users/:id", authenticate, requireInsider, async (req, res) => {
+  app.get("/users/:id", authenticate, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "invalid user id" });
     const users = await getUserById(id);
@@ -363,7 +356,7 @@ export function configRoutes(app: Express) {
     return res.json({ id: u.id, name: u.name, email: u.email, role: roles[0] || 'Developer', roles });
   });
 
-  app.get("/users", authenticate, requireInsider, async (_, res) => {
+  app.get("/users", authenticate, async (_, res) => {
     const users = await getUsers();
     // Attach roles to each user
     const enriched = await Promise.all(users.map(async (u) => {
@@ -544,6 +537,31 @@ export function configRoutes(app: Express) {
       }
     }
     return res.json(await getTaskByPhaseId(phaseId));
+  });
+
+  app.get("/projects", authenticate, restrictProject, async (_, res) => {
+    const all = await getProjects();
+    // For token users, filter to allowed project IDs only
+    if (res.locals.userId === -1 && res.locals.allowedProjectIds) {
+      const allowed = res.locals.allowedProjectIds;
+      return res.json(all.filter(p => allowed.includes(p.id)));
+    }
+    return res.json(all);
+  });
+
+  app.get("/projects/:id", authenticate, restrictProject, async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await getProjectsById(id));
+  });
+
+  app.get("/projects/:id/phases", authenticate, restrictProject, async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await getPhasesByProjectId(id));
+  });
+
+  app.get("/phases/:id", authenticate, restrictProject, async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await getPhasesById(id));
   });
 
   // Get all tasks for a project (across all phases)
@@ -818,6 +836,19 @@ export function configRoutes(app: Express) {
     }
 
     return res.json(await createResolutionTransaction(resolutionId, action as any, res.locals.tokenId, undefined, res.locals.username, message));
+  });
+
+  // ---- Urgency / notification routes ----
+
+  // Get urgency stats for all tasks (missed, urgent today, upcoming)
+  app.get("/tasks/urgency", authenticate, async (_req, res) => {
+    return res.json(await computeUrgency());
+  });
+
+  // Manual trigger: send daily breakdown email now (Admin only)
+  app.post("/tasks/urgency/send", authenticate, requireRole("Admin"), async (_req, res) => {
+    const result = await triggerManualSend();
+    return res.json(result);
   });
 
 }

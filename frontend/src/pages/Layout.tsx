@@ -75,8 +75,8 @@ export default function Layout(props: { children?: JSX.Element }) {
       {/* SIDEBAR */}
       <aside
         class={`bg-[#0B0B0C] border-r border-[#1F1F23] flex flex-col shrink-0 h-screen sticky top-0 transition-all duration-200 ${
-          sidebarExpanded() ? 'w-56' : 'w-14'
-        }`}
+sidebarExpanded() ? 'w-56' : 'w-14'
+}`}
       >
         {/* Logo */}
         <div class="flex items-center gap-2.5 px-3.5 py-3.5 border-b border-[#1F1F23]">
@@ -116,49 +116,50 @@ export default function Layout(props: { children?: JSX.Element }) {
             href={basePath()}
             end
             class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
-              location.pathname === basePath()
-                ? 'text-blue-400 bg-blue-600/15'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
-            }`}
+location.pathname === basePath()
+? 'text-blue-400 bg-blue-600/15'
+: 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
+}`}
           >
             <LayoutDashboard size={15} />
             <Show when={sidebarExpanded()}><span>Dashboard</span></Show>
           </A>
-          <A
-            href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=board` : basePath()}
-            class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
-              location.pathname.includes('/tasks') && location.search.includes('view=board')
+          <Show when={!params.token_id}>
+            <A
+              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=board` : basePath()}
+              class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
+                location.pathname.includes('/tasks') && location.search.includes('view=board')
                 ? 'text-blue-400 bg-blue-600/15'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
-            }`}
-          >
-            <Columns size={15} />
-            <Show when={sidebarExpanded()}><span>Board</span></Show>
-          </A>
-          <A
-            href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=list` : basePath()}
-            class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
+                }`}
+              >
+              <Columns size={15} />
+              <Show when={sidebarExpanded()}><span>Board</span></Show>
+            </A>
+            <A
+              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=list` : basePath()}
+              class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=list')
-                ? 'text-blue-400 bg-blue-600/15'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
-            }`}
-          >
-            <List size={15} />
-            <Show when={sidebarExpanded()}><span>List</span></Show>
-          </A>
+              ? 'text-blue-400 bg-blue-600/15'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
+              }`}
+            >
+              <List size={15} />
+              <Show when={sidebarExpanded()}><span>List</span></Show>
+            </A>
 
-          <A
-            href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=timeline` : basePath()}
-            class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
+            <A
+              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=timeline` : basePath()}
+              class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=timeline')
-                ? 'text-blue-400 bg-blue-600/15'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
-            }`}
-          >
-            <ChartNoAxesGantt size={15} />
-            <Show when={sidebarExpanded()}><span>Timeline</span></Show>
-          </A>
-
+              ? 'text-blue-400 bg-blue-600/15'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
+              }`}
+            >
+              <ChartNoAxesGantt size={15} />
+              <Show when={sidebarExpanded()}><span>Timeline</span></Show>
+            </A>
+          </Show>
 
           {/* Divider */}
           <Show when={sidebarExpanded()}>
@@ -300,7 +301,7 @@ export default function Layout(props: { children?: JSX.Element }) {
         </header>
 
         {/* Page Content */}
-        <main ref={contentRef} class="flex-1 overflow-y-auto page-enter">
+        <main ref={contentRef} class="flex-1 page-enter">
           {props.children}
         </main>
       </div>

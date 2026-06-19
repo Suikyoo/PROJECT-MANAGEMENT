@@ -15,6 +15,7 @@ import {
 import { session, currentUser, getProjectById } from '../lib/store';
 import { nameToColor } from '../lib/misc';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import UrgencyPanel from '../components/UrgencyPanel';
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -407,7 +408,7 @@ export default function DashBoardView() {
     : `/insider/project/${projectId()}/issues`;
 
   return (
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col">
       {/* Project Header */}
       <Show when={project()}>
         <div class="border-b border-[#1F1F23] px-5 pt-5 pb-4 shrink-0">
@@ -491,7 +492,6 @@ export default function DashBoardView() {
         </div>
       </Show>
       {/* Scrollable content area */}
-      <div class="flex-1 overflow-y-auto">
         <div class="max-w-5xl mx-auto w-full p-5">
       <Show when={error()}><div class="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{error()}<button class="ml-2 underline cursor-pointer bg-transparent border-none text-red-400" onClick={() => setError('')}>Dismiss</button></div></Show>
 
@@ -529,6 +529,13 @@ export default function DashBoardView() {
           View Issues
         </A>
       </div>
+
+      {/* Urgency Panel — only for insiders */}
+      <Show when={!params.token_id && currentUser()}>
+        <div class="mb-5">
+          <UrgencyPanel />
+        </div>
+      </Show>
 
       {/* Phases — reference-style flat list */}
       <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Phases</h3>
@@ -787,6 +794,5 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
       </Show>
       </div>
     </div>
-  </div>
   );
 }

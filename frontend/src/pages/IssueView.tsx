@@ -239,8 +239,7 @@ export default function IssueView() {
     && (!resolutions().length || lastResAction() === 'revise');
 
   return (
-    <div class="h-full flex flex-col max-w-5xl mx-auto px-4 py-6">
-      <div class="flex-1 overflow-y-auto">
+    <div class="w-full max-w-6xl mx-auto px-4 py-6">
 
       {/* Back link */}
       <A href={backUrl} class="text-zinc-500 hover:text-zinc-300 text-[11px] mb-6 inline-block transition-colors">
@@ -293,7 +292,7 @@ export default function IssueView() {
                     // Client-side resolution actions need inline buttons (only if they haven't stamped yet)
                     const showClientResButtons = isLatestRes && !isInsider() && !!params.token_id
                       && (item.data.action === 'to-review' || item.data.action === 'revise')
-                      && !resolutionTransactions().some(t => t.tokenId === params.token_id);
+                      && !resolutionTransactions().some(t => t.tokenId === params.token_id && t.resolutionId === latestResolutionId());
                     // Insider issue actions need inline buttons
                     const showInsiderIssueButtons = isLatestIssue && isInsider() && !!currentUser()
                       && availableIssueActions().length > 0;
@@ -590,7 +589,6 @@ export default function IssueView() {
         </div>
       </Show>
 
-      </div>
     </div>
   );
 }

@@ -217,6 +217,10 @@ export const logout = () =>
 export const getMe = () =>
   api<SessionUser>('/auth/me');
 
+// Public: get token display name (for client greeting)
+export const getTokenName = (tokenId: string) =>
+  api<{ name: string }>(`/auth/token/me?token_id=${encodeURIComponent(tokenId)}`);
+
 // Admin auth
 export const adminLogin = (email: string, password: string) =>
   api<{ ok: boolean; role: string }>('/auth/admin/login', {
@@ -399,6 +403,34 @@ export const uploadImage = async (file: File): Promise<{ url: string }> => {
   return res.json();
 };
 
+// ---- Urgency / Notifications ----
+
+export type TaskUrgency = 'missed' | 'urgent' | 'upcoming';
+
+export interface UrgentTask {
+  id: number;
+  phaseId: number;
+  title: string;
+  state: string;
+  priority: string;
+  end: string | null;
+  urgency: TaskUrgency;
+}
+
+export interface UrgencyStats {
+  total: number;
+  missed: number;
+  urgentToday: number;
+  upcoming: number;
+  tasks: UrgentTask[];
+}
+
+export const getUrgencyStats = () =>
+  api<UrgencyStats>('/tasks/urgency');
+
+export const sendUrgencyEmail = () =>
+  api<{ sent: number; errors: string[] }>('/tasks/urgency/send', { method: 'POST' });
+
 // Project Log
 export const getProjectLog = (projectId: number, tokenId?: string) =>
   api<ProjectLog>('/projects/' + projectId + '/log', undefined, tokenId);
@@ -426,8 +458,8 @@ export const setPhaseLog = (phaseId: number, content: string, tokenId?: string) 
 export const getUsers = () =>
   api<User[]>('/admin/users');
 
-export const getAllUsers = () =>
-  api<User[]>('/users');
+export const getAllUsers = (tokenId?: string) =>
+  api<User[]>('/users', undefined, tokenId);
 
 export const getPendingUsers = () =>
   api<User[]>('/admin/users/pending');
