@@ -3,8 +3,8 @@ import { JSX, Show, For, createSignal, createMemo, createEffect, onMount } from 
 import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import { getProjects, logout, type Project } from '../lib/fetch';
-import { session, setSession, getProjectById, refetchSession } from '../lib/store';
-import { LayoutDashboard, Columns, List, Search, ChevronLeft, ChevronRight, ChevronDown, Plus, Settings, Activity, LogOut, ChartNoAxesGantt, User } from 'lucide-solid';
+import { session, setSession, getProjectById, setProjectsCache, projectsVersion, refetchSession } from '../lib/store';
+import { LayoutDashboard, Columns, List, Search, ChevronLeft, ChevronRight, ChevronDown, Plus, Settings, Box, LogOut, ChartNoAxesGantt, User } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
 
 export default function Layout(props: { children?: JSX.Element }) {
@@ -16,7 +16,13 @@ export default function Layout(props: { children?: JSX.Element }) {
   const [sidebarExpanded, setSidebarExpanded] = createSignal(true);
   const [projectsExpanded, setProjectsExpanded] = createSignal(true);
 
-  const [projects] = createResource<Project[]>(() => getProjects(params.token_id));
+  const [projects] = createResource<Project[]>(async () => {
+    const _v = projectsVersion(); // track version for refresh signaling
+    const token = params.token_id;
+    const data = await getProjects(token);
+    setProjectsCache(data);
+    return data;
+  });
   const firstProjectId = createMemo(() => projects()?.[0]?.id);
 
   const activeProject = () => {
@@ -30,7 +36,7 @@ export default function Layout(props: { children?: JSX.Element }) {
   const handleLogout = async () => {
     await logout();
     setSession(null);
-    navigate('/login');
+    navigate('/insider/login');
   };
 
   // Insider auth guard — only for non-client routes
@@ -38,7 +44,7 @@ export default function Layout(props: { children?: JSX.Element }) {
     let hasSession = false;
     try { hasSession = !!session(); } catch { /* session errored (e.g. getMe 401) */ }
     if (!hasSession) {
-      navigate('/login', { replace: true });
+      navigate('/insider/login', { replace: true });
       return null;
     }
   }
@@ -80,11 +86,11 @@ sidebarExpanded() ? 'w-56' : 'w-14'
       >
         {/* Logo */}
         <div class="flex items-center gap-2.5 px-3.5 py-3.5 border-b border-[#1F1F23]">
-          <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
-            <Activity size={15} class="text-white" />
+          <div class="w-7 h-7 bg-purple-500/10 flex items-center justify-center shrink-0">
+            <Box size={14} class="text-purple-400" />
           </div>
           <Show when={sidebarExpanded()}>
-            <span class="font-bold text-sm tracking-wide text-white whitespace-nowrap">Orbit</span>
+            <span class="font-semibold text-sm text-white whitespace-nowrap">Orbit</span>
           </Show>
           <button
             onClick={() => setSidebarExpanded(p => !p)}
@@ -117,7 +123,7 @@ sidebarExpanded() ? 'w-56' : 'w-14'
             end
             class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
 location.pathname === basePath()
-? 'text-blue-400 bg-blue-600/15'
+? 'text-purple-400 bg-purple-500/15'
 : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
 }`}
           >
@@ -129,7 +135,7 @@ location.pathname === basePath()
               href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=board` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
                 location.pathname.includes('/tasks') && location.search.includes('view=board')
-                ? 'text-blue-400 bg-blue-600/15'
+                ? 'text-purple-400 bg-purple-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
                 }`}
               >
@@ -140,7 +146,7 @@ location.pathname === basePath()
               href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=list` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=list')
-              ? 'text-blue-400 bg-blue-600/15'
+              ? 'text-purple-400 bg-purple-500/15'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
               }`}
             >
@@ -152,7 +158,7 @@ location.pathname === basePath()
               href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=timeline` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=timeline')
-              ? 'text-blue-400 bg-blue-600/15'
+              ? 'text-purple-400 bg-purple-500/15'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
               }`}
             >
@@ -211,7 +217,7 @@ location.pathname === basePath()
               href={`${basePath()}/user`}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
                 location.pathname === `${basePath()}/user`
-                  ? 'text-blue-400 bg-blue-600/15'
+                  ? 'text-purple-400 bg-purple-500/15'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121214]'
               }`}
             >
@@ -251,7 +257,7 @@ location.pathname === basePath()
               href={`${basePath()}/user`}
               class={`flex justify-center py-1.5 rounded-md transition-colors ${
                 location.pathname === `${basePath()}/user`
-                  ? 'text-blue-400 bg-blue-600/15'
+                  ? 'text-purple-400 bg-purple-500/15'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
               title="User Settings"

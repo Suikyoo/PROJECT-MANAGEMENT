@@ -2,7 +2,7 @@
 import { createSignal, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import { adminLogin } from '../lib/fetch';
-import { Zap } from 'lucide-solid';
+import { Box } from 'lucide-solid';
 
 export default function AdminLogin() {
   const [email, setEmail] = createSignal('');
@@ -28,8 +28,10 @@ export default function AdminLogin() {
     <div class="min-h-screen bg-[#0B0B0C] text-zinc-300 font-sans flex items-center justify-center p-6">
       <div class="w-full max-w-sm">
         <A href="/" class="flex items-center gap-2 mb-8 no-underline text-white justify-center">
-          <div class="bg-white text-black w-6 h-6 rounded-md flex items-center justify-center"><Zap size={14} /></div>
-          <span class="font-bold text-base">Orbit Admin</span>
+          <div class="bg-purple-500/10 w-6 h-6 flex items-center justify-center">
+            <Box size={24} class="text-purple-400" />
+          </div>
+          <span class="font-semibold text-base">Orbit</span>
         </A>
         <div class="bg-[#121214] border border-[#1F1F23] p-6 rounded-lg">
           <h3 class="text-sm font-semibold text-white mb-4">Admin Login</h3>

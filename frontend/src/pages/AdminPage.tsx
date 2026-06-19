@@ -7,7 +7,7 @@ import {
   getProjects, sendUrgencyEmail,
   type User, type Token, type Project, type Access,
 } from '../lib/fetch';
-import { Zap, Send } from 'lucide-solid';
+import { Box, Send } from 'lucide-solid';
 
 export default function AdminPage() {
   const [users, { refetch: refetchUsers }] = createResource<User[]>(getUsers);
@@ -133,8 +133,10 @@ export default function AdminPage() {
       <header class="border-b border-[#1F1F23] bg-[#121214]">
         <div class="max-w-5xl mx-auto flex items-center justify-between px-6 h-14">
           <A href="/" class="flex items-center gap-2 no-underline text-white">
-            <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Zap size={12} /></div>
-            <span class="font-bold text-base">Orbit Admin</span>
+            <div class="bg-purple-500/10 w-7 h-7 flex items-center justify-center">
+              <Box size={24} class="text-purple-400" />
+            </div>
+            <span class="font-semibold text-base">Orbit</span>
           </A>
           <button onClick={handleLogout} class="bg-transparent border border-[#3F3F46] text-zinc-400 text-xs px-3 py-1.5 rounded cursor-pointer hover:text-white">Logout</button>
         </div>

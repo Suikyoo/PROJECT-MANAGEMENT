@@ -1,7 +1,7 @@
 // ~/src/lib/store.ts
-import { createResource } from 'solid-js';
+import { createResource, createSignal } from 'solid-js';
 import {
-  getMe, getProjects, getUsers,
+  getMe,
   acceptTask, submitTask, approveTask,
   togglePhaseState as apiTogglePhase,
   type SessionUser, type Project, type User, type TaskState,
@@ -82,38 +82,29 @@ export function refreshSession() {
 // Convenience: current user as a reactive accessor (for role-based UI gating)
 export const currentUser = () => session();
 
-// --- Projects ---
+// --- Projects (shared cache, populated by Layout) ---
 
-export const [projects, { refetch: refetchProjects }] = createResource<Project[]>(() => getProjects());
+const [sharedProjects, setSharedProjects] = createSignal<Project[]>([]);
+
+/** Called by Layout.tsx after fetching projects — keeps getProjectById in sync */
+export function setProjectsCache(projects: Project[]) {
+  setSharedProjects(projects);
+}
 
 export function getProjectById(id: number): Project | undefined {
-  return projects()?.find(p => p.id === id);
+  return sharedProjects()?.find(p => p.id === id);
 }
 
 // Alias for legacy consumers
 export const getActiveProject = getProjectById;
 
-export async function refreshProjects() {
-  await refetchProjects();
+// Incrementing counter so components can trigger Layout.tsx to re-fetch
+const [projectsVersion, setProjectsVersion] = createSignal(0);
+export { projectsVersion };
+
+export function refreshProjects() {
+  setProjectsVersion(v => v + 1);
 }
-
-// --- Users ---
-
-export const [users, { refetch: refetchUsers }] = createResource<(User & { initials: string })[]>(async () => {
-  try {
-    const raw = await getUsers();
-    return raw.map(u => ({ ...u, initials: getInitials(u.name) }));
-  } catch {
-    return [];
-  }
-});
-
-// --- Legacy reactive store object ---
-
-export const store = {
-  get projects() { return projects() ?? []; },
-  get users() { return users() ?? []; },
-};
 
 // --- Task state transitions ---
 
@@ -131,13 +122,13 @@ export async function updateTaskState(_projectId: number, _phaseId: number, task
     default:
       return;
   }
-  await refetchProjects();
+  refreshProjects();
 }
 
 // --- Phase state toggle ---
 
 export async function togglePhaseState(_projectId: number, phaseId: number) {
   await apiTogglePhase(phaseId);
-  await refetchProjects();
+  refreshProjects();
 }
 

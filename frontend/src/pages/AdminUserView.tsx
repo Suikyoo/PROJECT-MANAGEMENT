@@ -6,7 +6,7 @@ import {
   getUserById, addUserRole, removeUserRole,
   type User,
 } from '../lib/fetch';
-import { Zap, ArrowLeft, Plus, X } from 'lucide-solid';
+import { Box, ArrowLeft, Plus, X } from 'lucide-solid';
 
 const ALL_ROLES: { value: string; label: string; bg: string; text: string }[] = [
   { value: 'Supervisor', label: 'Supervisor', bg: 'bg-violet-500/15', text: 'text-violet-400' },
@@ -72,7 +72,7 @@ export default function AdminUserView() {
               <span class="text-xs">Back</span>
             </A>
             <A href="/" class="flex items-center gap-2 no-underline text-white">
-              <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Zap size={12} /></div>
+              <div class="bg-white text-black w-5.5 h-5.5 rounded-md flex items-center justify-center"><Box size={24} /></div>
               <span class="font-bold text-base">Orbit Admin</span>
             </A>
           </div>

@@ -11,7 +11,7 @@ export default function ProjectLayout({children}: {children?: JSX.Element}) {
     let hasSession = false;
     try { hasSession = !!session(); } catch { /* session resource errored (e.g. getMe 401) */ }
     if (!hasSession) {
-      navigate('/login', { replace: true });
+      navigate('/insider/login', { replace: true });
       return null;
     }
   }

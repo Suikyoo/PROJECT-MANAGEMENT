@@ -3,7 +3,7 @@ import { createSignal, Show, onMount } from 'solid-js';
 import { useNavigate, A } from '@solidjs/router';
 import { login, signup, verifyOTP, resendOTP, googleOAuthLogin, googleOAuthSignup } from '../lib/fetch';
 import { refreshSession } from '../lib/store';
-import { Zap } from 'lucide-solid';
+import { Box } from 'lucide-solid';
 import OtpModal from '../components/OTPModal';
 import ForgetPasswordModal from '../components/ForgetPasswordModal';
 
@@ -159,8 +159,10 @@ export default function InsiderLogin() {
     <div class="min-h-screen bg-[#0B0B0C] text-zinc-300 font-sans flex items-center justify-center p-6">
       <div class="w-full max-w-sm">
         <A href="/" class="flex items-center gap-2 mb-8 no-underline text-white justify-center">
-          <div class="bg-white text-black w-6 h-6 rounded-md flex items-center justify-center"><Zap size={14} /></div>
-          <span class="font-bold text-base">Orbit Insider</span>
+          <div class="bg-purple-500/10 w-6 h-6 flex items-center justify-center">
+            <Box size={24} class="text-purple-400" />
+          </div>
+          <span class="font-semibold text-base">Orbit</span>
         </A>
 
         <div class="bg-[#121214] border border-[#1F1F23] p-6 rounded-lg">

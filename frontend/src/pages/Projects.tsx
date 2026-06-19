@@ -3,7 +3,7 @@ import { For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
 import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, getTokenName, type Project, type Phase, type Task, type User } from '../lib/fetch';
-import { session, refreshProjects } from '../lib/store';
+import { session, setProjectsCache, refreshProjects } from '../lib/store';
 import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
 import { Chart, BarElement, CategoryScale, LinearScale, BarController, Tooltip } from 'chart.js';
@@ -15,7 +15,11 @@ export default function Projects() {
   const basePath = () => params.token_id ? `/client/${params.token_id}` : '/insider';
 
   // Data fetching: pass token_id — backend handles both insider (cookie) and client (token) auth
-  const projectsFetcher = () => getProjects(params.token_id);
+  const projectsFetcher = async () => {
+    const data = await getProjects(params.token_id);
+    setProjectsCache(data);
+    return data;
+  };
   const phasesFetcher = (projectId: number) => getPhasesByProject(projectId, params.token_id);
   const tasksFetcher = (projectId: number) => getTasksByProject(projectId, params.token_id);
 

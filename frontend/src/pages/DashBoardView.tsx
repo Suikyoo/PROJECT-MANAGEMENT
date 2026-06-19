@@ -34,18 +34,18 @@ export default function DashBoardView() {
   const [error, setError] = createSignal('');
 
   let loadPhasesReqId = 0;
-  let loadPhasesRunning = false;
   const loadPhases = async () => {
     const pid = projectId();
-    if (isNaN(pid) || pid <= 0 || loadPhasesRunning) return;
+    if (isNaN(pid) || pid <= 0) return;
     const reqId = ++loadPhasesReqId;
-    loadPhasesRunning = true;
     setPhasesLoading(true);
     setPhasesError(undefined);
     try {
       const result = await getPhasesByProject(pid, params.token_id);
+      if (reqId !== loadPhasesReqId) return; // stale — a newer request is in flight
       setPhases(result);
     } catch (e: any) {
+      if (reqId !== loadPhasesReqId) return; // stale
       console.error(`[DashBoard] loadPhases #${reqId} ERROR:`, e);
       const msg = e?.message || String(e);
       if (msg.includes('Unauthorized') || msg.includes('401') || msg.includes('403'))
@@ -53,22 +53,29 @@ export default function DashBoardView() {
       else
         setPhasesError(`Failed to load phases: ${msg}`);
     } finally {
-      setPhasesLoading(false);
-      loadPhasesRunning = false;
+      if (reqId === loadPhasesReqId) {
+        setPhasesLoading(false);
+      }
     }
   };
 
+  let loadTasksReqId = 0;
   const loadTasks = async () => {
     const pid = projectId();
     if (isNaN(pid) || pid <= 0) return;
+    const reqId = ++loadTasksReqId;
     setTasksLoading(true);
     try {
       const result = await getTasksByProject(pid, params.token_id);
+      if (reqId !== loadTasksReqId) return; // stale
       setAllTasks(result);
     } catch (e: any) {
+      if (reqId !== loadTasksReqId) return; // stale
       console.error("[DashBoard] loadTasks ERROR:", e);
     } finally {
-      setTasksLoading(false);
+      if (reqId === loadTasksReqId) {
+        setTasksLoading(false);
+      }
     }
   };
 
