@@ -1,4 +1,4 @@
-// ~/src/pages/Layout.tsx
+// ~/src/pages/rayout.tsx
 import { JSX, Show, For, createSignal, createMemo, createEffect, onMount } from 'solid-js';
 import { A, useNavigate, useLocation, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
@@ -11,27 +11,27 @@ export default function Layout(props: { children?: JSX.Element }) {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
+  const projectId = createMemo(() => Number(params.project_id))
+  const tokenId = createMemo(() =>params.token_id)
 
   const [searchQuery, setSearchQuery] = createSignal('');
   const [sidebarExpanded, setSidebarExpanded] = createSignal(true);
   const [projectsExpanded, setProjectsExpanded] = createSignal(true);
 
-  const [projects] = createResource<Project[]>(async () => {
-    const _v = projectsVersion(); // track version for refresh signaling
-    const token = params.token_id;
-    const data = await getProjects(token);
+  const [projects] = createResource(projectsVersion, async () => {
+    const data = await getProjects(tokenId());
     setProjectsCache(data);
     return data;
   });
   const firstProjectId = createMemo(() => projects()?.[0]?.id);
 
   const activeProject = () => {
-    if (params.project_id) return getProjectById(Number(params.project_id));
+    if (projectId()) return getProjectById(projectId());
     return undefined;
   };
 
   const isProjectView = () => location.pathname.includes('/project/');
-  const currentProjectId = () => Number(params.project_id) || 0;
+  const currentProjectId = () => Number(projectId()) || 0;
 
   const handleLogout = async () => {
     await logout();
@@ -40,7 +40,7 @@ export default function Layout(props: { children?: JSX.Element }) {
   };
 
   // Insider auth guard — only for non-client routes
-  if (!params.token_id) {
+  if (!tokenId()) {
     let hasSession = false;
     try { hasSession = !!session(); } catch { /* session errored (e.g. getMe 401) */ }
     if (!hasSession) {
@@ -51,7 +51,7 @@ export default function Layout(props: { children?: JSX.Element }) {
 
   onMount( async() => await refetchSession());
   ;
-  const basePath = () => params.token_id ? `/client/${params.token_id}` : '/insider';
+  const basePath = () => tokenId() ? `/client/${tokenId()}` : '/insider';
 
   // Page transition animation — re-triggers on route change
   let contentRef!: HTMLDivElement;
@@ -130,9 +130,9 @@ location.pathname === basePath()
             <LayoutDashboard size={15} />
             <Show when={sidebarExpanded()}><span>Dashboard</span></Show>
           </A>
-          <Show when={!params.token_id}>
+          <Show when={!tokenId() && isProjectView()}>
             <A
-              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=board` : basePath()}
+              href={currentProjectId() ? `${basePath()}/project/${currentProjectId()}/tasks?view=board` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
                 location.pathname.includes('/tasks') && location.search.includes('view=board')
                 ? 'text-purple-400 bg-purple-500/15'
@@ -143,7 +143,7 @@ location.pathname === basePath()
               <Show when={sidebarExpanded()}><span>Board</span></Show>
             </A>
             <A
-              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=list` : basePath()}
+              href={currentProjectId() ? `${basePath()}/project/${currentProjectId()}/tasks?view=list` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=list')
               ? 'text-purple-400 bg-purple-500/15'
@@ -155,7 +155,7 @@ location.pathname === basePath()
             </A>
 
             <A
-              href={firstProjectId() ? `${basePath()}/project/${firstProjectId()}/tasks?view=timeline` : basePath()}
+              href={currentProjectId() ? `${basePath()}/project/${currentProjectId()}/tasks?view=timeline` : basePath()}
               class={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium no-underline transition-colors ${
               location.pathname.includes('/tasks') && location.search.includes('view=timeline')
               ? 'text-purple-400 bg-purple-500/15'
@@ -227,7 +227,7 @@ location.pathname === basePath()
           </Show>
 
           {/* User Footer — insider only */}
-          <Show when={!params.token_id}>
+          <Show when={!tokenId()}>
             <div class={`flex items-center gap-2.5 ${sidebarExpanded() ? 'px-2.5 py-1.5' : 'justify-center py-1'}`}>
               <div
                 class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold text-white"
@@ -252,7 +252,7 @@ location.pathname === basePath()
           </Show>
 
           {/* Collapsed user links */}
-          <Show when={!params.token_id && !sidebarExpanded()}>
+          <Show when={!tokenId() && !sidebarExpanded()}>
             <A
               href={`${basePath()}/user`}
               class={`flex justify-center py-1.5 rounded-md transition-colors ${
@@ -308,7 +308,9 @@ location.pathname === basePath()
 
         {/* Page Content */}
         <main ref={contentRef} class="flex-1 page-enter">
-          {props.children}
+          <div class="h-screen overflow-y-scroll flex flex-col">
+            {props.children}
+          </div>
         </main>
       </div>
     </div>

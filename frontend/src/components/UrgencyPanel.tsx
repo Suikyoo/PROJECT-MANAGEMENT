@@ -1,9 +1,13 @@
 import { createResource, Show } from "solid-js";
-import { getUrgencyStats, type UrgencyStats } from "../lib/fetch";
+import { getUrgencyStats, getUrgencyStatsByProjectId, type UrgencyStats } from "../lib/fetch";
 import { AlertTriangle, Clock, Loader2 } from "lucide-solid";
 
-export default function UrgencyPanel() {
-  const [stats, { refetch }] = createResource<UrgencyStats>(getUrgencyStats);
+export default function UrgencyPanel(props: {id?: number}) {
+
+  const projectId = () => props.id;
+  const fetchFunc = async (id: number) => await (id ? getUrgencyStatsByProjectId(id) : getUrgencyStats())
+
+  const [stats, { refetch }] = createResource(projectId, fetchFunc);
 
   const urgencyBorder = (u: string) => {
     switch (u) {

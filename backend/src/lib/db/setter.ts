@@ -308,6 +308,20 @@ export async function createResolutionTransaction(resolutionId: number, action: 
   return result[0];
 }
 
+// --- Delete setters ---
+
+export async function deleteTask(taskId: number) {
+  return await db.delete(taskTable).where(eq(taskTable.id, taskId)).returning();
+}
+
+export async function deletePhase(phaseId: number) {
+  return await db.delete(phaseTable).where(eq(phaseTable.id, phaseId)).returning();
+}
+
+export async function deleteProject(projectId: number) {
+  return await db.delete(projectTable).where(eq(projectTable.id, projectId)).returning();
+}
+
 export async function createResolution(issueId: number, userId: number, title: string, description: string, proof?: string) {
   const [resolution] = await db.insert(resolutionTable).values({
     issueId,

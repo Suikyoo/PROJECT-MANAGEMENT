@@ -244,6 +244,9 @@ export const createProject = (name: string, description: string, tokenId?: strin
     body: JSON.stringify({ name, description }),
   }, tokenId);
 
+export const deleteProject = (id: number, tokenId?: string) =>
+  api<void>('/projects/' + id, { method: 'DELETE' }, tokenId);
+
 // Phases
 export const createPhase = (projectId: number, name: string, tokenId?: string) =>
   api<Phase>('/projects/' + projectId + '/phases', {
@@ -253,6 +256,9 @@ export const createPhase = (projectId: number, name: string, tokenId?: string) =
 
 export const togglePhaseState = (phaseId: number, tokenId?: string) =>
   api<Phase[]>('/phases/' + phaseId + '/toggle', { method: 'POST' }, tokenId);
+
+export const deletePhase = (id: number, tokenId?: string) =>
+  api<void>('/phases/' + id, { method: 'DELETE' }, tokenId);
 
 // Tasks
 export const getTasksByPhase = (phaseId: number, tokenId?: string) =>
@@ -275,6 +281,9 @@ export const submitTask = (taskId: number, tokenId?: string) =>
 
 export const approveTask = (taskId: number, tokenId?: string) =>
   api<Task[]>('/tasks/' + taskId + '/approve', { method: 'POST' }, tokenId);
+
+export const deleteTask = (id: number, tokenId?: string) =>
+  api<void>('/tasks/' + id, { method: 'DELETE' }, tokenId);
 
 // Tags
 export const getTagsByTask = (taskId: number, tokenId?: string) =>
@@ -427,6 +436,9 @@ export interface UrgencyStats {
 
 export const getUrgencyStats = () =>
   api<UrgencyStats>('/tasks/urgency');
+
+export const getUrgencyStatsByProjectId = (id: number) =>
+  api<UrgencyStats>(`/tasks/urgency/${id}`);
 
 export const sendUrgencyEmail = () =>
   api<{ sent: number; errors: string[] }>('/tasks/urgency/send', { method: 'POST' });

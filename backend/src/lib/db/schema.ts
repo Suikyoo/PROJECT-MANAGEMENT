@@ -9,7 +9,7 @@ export const projectTable = pgTable('projects', {
 
 export const phaseTable = pgTable('phases', {
 	id: serial('id').primaryKey(),
-  projectId: integer('project_id').references(() => projectTable.id).notNull(),
+  projectId: integer('project_id').references(() => projectTable.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
   state: text("state").notNull().default("UAT"),
 });
@@ -30,7 +30,7 @@ export const userRoleTable = pgTable('user_roles', {
 
 export const taskTable = pgTable('tasks', {
 	id: serial('id').primaryKey(),
-  phaseId: integer("phase_id").references( () => phaseTable.id).notNull(),
+  phaseId: integer("phase_id").references( () => phaseTable.id, { onDelete: 'cascade' }).notNull(),
   //when inserting a task, there needs to be a supervisor or a user attached to it
   supervisorId: integer("supervisor_id").references(() => userTable.id).notNull(),
   developerId: integer("developer_id").references(() => userTable.id),
@@ -44,7 +44,7 @@ export const taskTable = pgTable('tasks', {
 
 export const projectCommentTable = pgTable('project_comments', {
   id: serial('id').primaryKey(),
-  projectId: integer("project_id").references(() => projectTable.id).notNull(),
+  projectId: integer("project_id").references(() => projectTable.id, { onDelete: 'cascade' }).notNull(),
   userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
@@ -53,7 +53,7 @@ export const projectCommentTable = pgTable('project_comments', {
 
 export const phaseCommentTable = pgTable('phase_comments', {
   id: serial('id').primaryKey(),
-  phaseId: integer("phase_id").references(() => phaseTable.id).notNull(),
+  phaseId: integer("phase_id").references(() => phaseTable.id, { onDelete: 'cascade' }).notNull(),
   userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
@@ -62,13 +62,13 @@ export const phaseCommentTable = pgTable('phase_comments', {
 
 export const projectLogTable = pgTable('project_logs', {
   id: serial('id').primaryKey(),
-  projectId: integer('project_id').references(() => projectTable.id).notNull().unique(),
+  projectId: integer('project_id').references(() => projectTable.id, { onDelete: 'cascade' }).notNull().unique(),
   content: text('content').notNull().default(''),
 });
 
 export const phaseLogTable = pgTable('phase_logs', {
   id: serial('id').primaryKey(),
-  phaseId: integer('phase_id').references(() => phaseTable.id).notNull().unique(),
+  phaseId: integer('phase_id').references(() => phaseTable.id, { onDelete: 'cascade' }).notNull().unique(),
   content: text('content').notNull().default(''),
 });
 
@@ -76,7 +76,7 @@ export const phaseLogTable = pgTable('phase_logs', {
 
 export const resolutionTable = pgTable('resolutions', {
   id: serial('id').primaryKey(),
-  issueId: integer('issue_id').references((): any => issueTable.id).notNull(),
+  issueId: integer('issue_id').references((): any => issueTable.id, { onDelete: 'cascade' }).notNull(),
   userId: integer("user_id").references(() => userTable.id).notNull(),
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
@@ -122,7 +122,7 @@ export const resolutionTransactionTable = pgTable('resolution_transactions', {
 
 export const issueCommentTable = pgTable('issue_comments', {
   id: serial('id').primaryKey(),
-  issueId: integer('issue_id').references(() => issueTable.id).notNull(),
+  issueId: integer('issue_id').references(() => issueTable.id, { onDelete: 'cascade' }).notNull(),
   userId: integer("user_id"),
   authorName: text("author_name"),
   content: text("content").notNull(),
@@ -151,7 +151,7 @@ export const tokenTable = pgTable('tokens', {
 export const accessTable = pgTable('access', {
   id: serial('id').primaryKey(),
   tokenId: uuid('token_id').references(() => tokenTable.id).notNull(),
-  projectId: integer('project_id').references(() => projectTable.id).notNull(),
+  projectId: integer('project_id').references(() => projectTable.id, { onDelete: 'cascade' }).notNull(),
 });
 
 export const tagTable = pgTable('tags', {

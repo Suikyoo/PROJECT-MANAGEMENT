@@ -43,7 +43,7 @@ render(
         <Route path="/" component={Projects} />
         <Route path="/user" component={UserView} />
         <Route path="/users/:id" component={UserView} />
-        <Route path="/project/:project_id" component={ProjectLayout} >
+        <Route path="/project/:project_id" component={ProjectLayout}>
           <Route path="/" component={DashBoardView} />
           <Route path="/log" component={ProjectLogView} />
           <Route path="/tasks" component={ProjectView} />

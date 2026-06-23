@@ -8,6 +8,7 @@ import {
   acceptTask, submitTask, approveTask,
   getTagsByTask, createTag, deleteTag,
   getIssuesByProject,
+  deletePhase, deleteTask,
   type Phase, type Task, type Tag, type User,
   type Issue,
   ProjectComment
@@ -16,11 +17,12 @@ import { session, currentUser, getProjectById } from '../lib/store';
 import { nameToColor } from '../lib/misc';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import UrgencyPanel from '../components/UrgencyPanel';
-import { ChevronDown, ChevronRight } from 'lucide-solid';
+import ConfirmModal from '../components/ConfirmModal';
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-solid';
 
 export default function DashBoardView() {
   const params = useParams();
-  const projectId = () => Number(params.project_id);
+  const projectId = createMemo(() => Number(params.project_id));
 
   // Manual signal-based state to avoid createResource loading-state bugs
   const [phases, setPhases] = createSignal<Phase[] | undefined>(undefined);
@@ -32,6 +34,12 @@ export default function DashBoardView() {
   const [tasksLoading, setTasksLoading] = createSignal(true);
 
   const [error, setError] = createSignal('');
+
+  // Delete confirmation state
+  const [phaseToDelete, setPhaseToDelete] = createSignal<Phase | null>(null);
+  const [taskToDelete, setTaskToDelete] = createSignal<Task | null>(null);
+  const [deletingPhase, setDeletingPhase] = createSignal(false);
+  const [deletingTask, setDeletingTask] = createSignal(false);
 
   let loadPhasesReqId = 0;
   const loadPhases = async () => {
@@ -157,6 +165,36 @@ export default function DashBoardView() {
 
   // Edit log is only available in insider mode (not client/token mode)
   const canEditLog = () => isSupervisor() && !params.token_id;
+
+  const handleDeletePhase = async () => {
+    const p = phaseToDelete();
+    if (!p) return;
+    setDeletingPhase(true);
+    try {
+      await deletePhase(p.id, params.token_id);
+      setPhaseToDelete(null);
+      refetchPhases();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete phase');
+    } finally {
+      setDeletingPhase(false);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    const t = taskToDelete();
+    if (!t) return;
+    setDeletingTask(true);
+    try {
+      await deleteTask(t.id, params.token_id);
+      setTaskToDelete(null);
+      refetchPhases(); // tasks are fetched alongside phases
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete task');
+    } finally {
+      setDeletingTask(false);
+    }
+  };
 
   const tasks = () => allTasks() || [];
   const project = () => getProjectById(projectId());
@@ -399,7 +437,7 @@ export default function DashBoardView() {
       {/* Urgency Panel — only for insiders */}
       <Show when={!params.token_id && currentUser()}>
         <div class="mb-5">
-          <UrgencyPanel />
+          <UrgencyPanel id={projectId()}/>
         </div>
       </Show>
 
@@ -439,7 +477,13 @@ export default function DashBoardView() {
                     <span>{phaseTasks().length} task{phaseTasks().length !== 1 ? 's' : ''}</span>
                     <Show when={isSupervisor() && !params.token_id}>
                       <button onClick={() => handleTogglePhase(phase.id)} class="text-[9px] text-zinc-500 hover:text-zinc-300 cursor-pointer bg-transparent border-none p-0 underline underline-offset-2">Toggle state</button>
-
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPhaseToDelete(phase); }}
+                        class="text-[9px] text-zinc-600 hover:text-red-400 cursor-pointer bg-transparent border-none p-0 underline underline-offset-2 transition-colors"
+                        title="Delete phase"
+                      >
+                        <Trash2 size={12} class="inline -mt-0.5" />
+                      </button>
                     </Show>
                   </div>
 
@@ -477,6 +521,16 @@ task.state === 'in-progress' ? 'bg-blue-500/15 text-blue-400' :
 task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
 'bg-emerald-500/15 text-emerald-400'
 }`}>{task.state}</span>
+
+                      <Show when={isSupervisor() && !params.token_id}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setTaskToDelete(task); }}
+                          class="p-0.5 text-zinc-600 hover:text-red-400 rounded cursor-pointer border-none bg-transparent transition-colors shrink-0"
+                          title="Delete task"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </Show>
 
                       {(() => {
                         const dev = getUserById(task.developerId);
@@ -600,6 +654,26 @@ task.state === 'to review' ? 'bg-orange-500/15 text-orange-400' :
           onRemoveTag={handleRemoveTag}
         />
       </Show>
+
+      {/* Delete Confirmation Modals */}
+      <ConfirmModal
+        open={phaseToDelete() !== null}
+        title="Delete Phase"
+        message={`Are you sure you want to delete "${phaseToDelete()?.name}"? This will permanently remove the phase and all its tasks.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeletePhase}
+        onClose={() => setPhaseToDelete(null)}
+        loading={deletingPhase()}
+      />
+      <ConfirmModal
+        open={taskToDelete() !== null}
+        title="Delete Task"
+        message={`Are you sure you want to delete "${taskToDelete()?.title}"?`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteTask}
+        onClose={() => setTaskToDelete(null)}
+        loading={deletingTask()}
+      />
       </div>
     </div>
   );

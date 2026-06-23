@@ -1,11 +1,12 @@
 // ~/src/components/TaskDetailPanel.tsx
 // Reusable slide-in panel for task detail, used by ProjectView (board/list/timeline),
 // DashBoardView (phases), and TaskView (standalone route).
-import { Show, For, createMemo } from 'solid-js';
+import { Show, For, createMemo, createSignal } from 'solid-js';
 import { A } from '@solidjs/router';
-import { type Task, type Tag, type User } from '../lib/fetch';
+import { type Task, type Tag, type User, deleteTask } from '../lib/fetch';
 import { nameToColor } from '../lib/misc';
-import { ArrowLeft } from 'lucide-solid';
+import { ArrowLeft, Trash2 } from 'lucide-solid';
+import ConfirmModal from './ConfirmModal';
 
 export interface TaskDetailPanelProps {
   task: Task;
@@ -80,6 +81,19 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
   };
   const handleApprove = async () => {
     try { await props.onApprove?.(t().id); props.onModified?.(); props.onClose(); } catch { /* handled by parent */ }
+  };
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteTask(t().id);
+      props.onModified?.();
+      props.onClose();
+    } catch { /* handled by parent */ }
+    finally { setDeleting(false); }
   };
 
   return (
@@ -181,7 +195,7 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
 
               {/* Workflow actions */}
               <Show when={props.roles.length > 0}>
-                <div class="border-t border-[#1F1F23] pt-4 flex gap-2">
+                <div class="border-t border-[#1F1F23] pt-4 flex gap-2 flex-wrap">
                   <Show when={props.roles.includes('Developer') && t().state === 'backlog'}>
                     <button onClick={handleAccept} class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-blue-500/30">
                       Accept task
@@ -195,6 +209,14 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
                   <Show when={props.roles.includes('QA') && t().state === 'to review'}>
                     <button onClick={handleApprove} class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-medium text-[12px] px-4 py-1.5 rounded-md cursor-pointer transition-colors border border-emerald-500/30">
                       Approve
+                    </button>
+                  </Show>
+                  <Show when={props.isSupervisor}>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      class="bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium text-[12px] px-3 py-1.5 rounded-md cursor-pointer transition-colors border border-red-500/20 flex items-center gap-1.5"
+                    >
+                      <Trash2 size={13} /> Delete
                     </button>
                   </Show>
                 </div>
@@ -266,6 +288,17 @@ export default function TaskDetailPanel(props: TaskDetailPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        open={showDeleteConfirm()}
+        title="Delete Task"
+        message={`Are you sure you want to delete "${t().title}"?`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onClose={() => setShowDeleteConfirm(false)}
+        loading={deleting()}
+      />
     </div>
   );
 }

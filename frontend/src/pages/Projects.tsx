@@ -2,11 +2,13 @@
 import { For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { A, useNavigate, useParams } from '@solidjs/router';
 import { createResource } from 'solid-js';
-import { getProjects, createProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, getTokenName, type Project, type Phase, type Task, type User } from '../lib/fetch';
+import { getProjects, createProject, deleteProject, getPhasesByProject, getTasksByProject, getAllUsers, getProjectUsers, getTokenName, type Project, type Phase, type Task, type User } from '../lib/fetch';
 import { session, setProjectsCache, refreshProjects } from '../lib/store';
-import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-solid';
+import { Plus, Hash, Activity, CheckCircle2, AlertCircle, ArrowRight, Trash2 } from 'lucide-solid';
 import { nameToColor } from '../lib/misc';
 import { Chart, BarElement, CategoryScale, LinearScale, BarController, Tooltip } from 'chart.js';
+import UrgencyPanel from '../components/UrgencyPanel';
+import ConfirmModal from '../components/ConfirmModal';
 Chart.register(BarElement, CategoryScale, LinearScale, BarController, Tooltip);
 
 export default function Projects() {
@@ -34,6 +36,8 @@ export default function Projects() {
   const [aggregateLoading, setAggregateLoading] = createSignal(false);
   const [allUsers, setAllUsers] = createSignal<User[]>([]);
   const [projectUsers, setProjectUsers] = createSignal<Record<number, User[]>>({});
+  const [projectToDelete, setProjectToDelete] = createSignal<Project | null>(null);
+  const [deleting, setDeleting] = createSignal(false);
 
   const isSupervisor = createMemo(() => {
     if (params.token_id) return false;
@@ -55,6 +59,22 @@ export default function Projects() {
       setError(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    const p = projectToDelete();
+    if (!p) return;
+    setDeleting(true);
+    try {
+      await deleteProject(p.id, params.token_id);
+      setProjectToDelete(null);
+      refetch();
+      refreshProjects();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete project');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -267,6 +287,8 @@ export default function Projects() {
         )}</For>
       </div>
 
+      <UrgencyPanel />
+
       {/* Main Content: 2+1 Grid */}
       <div class="flex gap-5">
         {/* Left column (2/3) */}
@@ -333,7 +355,21 @@ export default function Projects() {
                         </div>
                       </Show>
                     </div>
-                    <ArrowRight size={14} class="text-zinc-600 shrink-0" />
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Show when={isSupervisor()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProjectToDelete(project);
+                          }}
+                          class="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded cursor-pointer border-none bg-transparent transition-colors"
+                          title="Delete project"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </Show>
+                      <ArrowRight size={14} class="text-zinc-600" />
+                    </div>
                   </div>
                 );
               }}</For>
@@ -463,6 +499,17 @@ export default function Projects() {
           </div>
         </div>
       </Show>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        open={projectToDelete() !== null}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${projectToDelete()?.name}"? This will permanently remove the project, all its phases, tasks, and related data.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteProject}
+        onClose={() => setProjectToDelete(null)}
+        loading={deleting()}
+      />
     </div>
   );
 }

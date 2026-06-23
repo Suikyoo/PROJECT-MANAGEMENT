@@ -24,7 +24,7 @@ import {
   createTask, acceptTask, submitTask, approveTask,
   createProjectComment, createPhaseComment, createProjectLog, createPhaseLog,
   createToken, createAccess, deleteToken, deleteAccess,
-  createTag, deleteTag, createOtpSession, consumeOtpSession,
+  createTag, deleteTag, deleteTask, deletePhase, deleteProject, createOtpSession, consumeOtpSession,
   createForgetSession, consumeForgetSession, setUserPassword,
   createIssue, createIssueComment, createIssueTag, deleteIssueTag,
   createTagType, createResolution,
@@ -35,7 +35,7 @@ import { dumpAllTables, dumpTable } from "./lib/db/backup.ts"
 import { authenticateAdmin, authenticateUser } from "./lib/auth/index.ts";
 import { authenticate, requireRole, requireInsider, requireToken, restrictProject, isValidToken } from "./lib/auth/middleware.ts";
 
-import { computeUrgency } from "./lib/notifications/urgency.ts";
+import { computeUrgency, computeUrgencyByProjectId } from "./lib/notifications/urgency.ts";
 import { triggerManualSend } from "./lib/notifications/scheduler.ts";
 import { generateOTP, sendOTP, sendForgetUserEmail } from "./lib/auth/otp.ts";
 import cookieParser from "cookie-parser";
@@ -524,6 +524,23 @@ export function configRoutes(app: Express) {
     ));
   });
 
+  // ---- Delete (Supervisor only) ----
+
+  app.delete("/tasks/:id", authenticate, requireRole("Supervisor"), async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await deleteTask(id));
+  });
+
+  app.delete("/phases/:id", authenticate, requireRole("Supervisor"), async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await deletePhase(id));
+  });
+
+  app.delete("/projects/:id", authenticate, requireRole("Supervisor"), async (req, res) => {
+    const id = Number(req.params.id);
+    return res.json(await deleteProject(id));
+  });
+
   // ---- Task state transitions ----
   
   // Get tasks for a phase
@@ -843,6 +860,12 @@ export function configRoutes(app: Express) {
   // Get urgency stats for all tasks (missed, urgent today, upcoming)
   app.get("/tasks/urgency", authenticate, async (_req, res) => {
     return res.json(await computeUrgency());
+  });
+
+  //get urgency stats for tasks of a project (missed, urgent, today, upcoming)
+  app.get("/tasks/urgency/:project_id", authenticate, async (req, res) => {
+    const id = Number(req.params.project_id);
+    return res.json(await computeUrgencyByProjectId(id));
   });
 
   // Manual trigger: send daily breakdown email now (Admin only)

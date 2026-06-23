@@ -1,23 +1,28 @@
 // ~/src/pages/PhaseView.tsx
 import { For, Show, createSignal, createEffect, createMemo, untrack } from 'solid-js';
-import { useParams, A } from '@solidjs/router';
+import { useParams, useNavigate, A } from '@solidjs/router';
 import {
   getPhasesByProject, getTasksByPhase, togglePhaseState,
   getPhaseLog, setPhaseLog, getPhaseComments, createPhaseComment, uploadImage,
+  deletePhase,
   type Phase, type Task, type PhaseComment, PhaseLog
 } from '../lib/fetch';
 import { session } from '../lib/store';
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
-import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon, ArrowLeft } from 'lucide-solid';
+import { Bold, Italic, Heading1, Heading2, Heading3, ImageIcon, ArrowLeft, Trash2 } from 'lucide-solid';
 import FileHandler from '@tiptap/extension-file-handler';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function PhaseView() {
   const params = useParams();
+  const navigate = useNavigate();
   const phaseId = () => Number(params.phase_id);
 
   const [error, setError] = createSignal('');
+  const [deleting, setDeleting] = createSignal(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
 
   // Derive project context from URL
   const dashboardProjectId = () => Number(params.project_id);
@@ -91,6 +96,19 @@ export default function PhaseView() {
   });
   const isSupervisor = () => userRoles().includes('Supervisor');
   const canEditLog = () => isSupervisor() && !params.token_id;
+
+  const handleDeletePhase = async () => {
+    const p = phase();
+    if (!p) return;
+    setDeleting(true);
+    try {
+      await deletePhase(p.id, params.token_id);
+      navigate(backUrl());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete phase');
+      setDeleting(false);
+    }
+  };
 
   // Create editor when element is available and edit modal is open
   createEffect(() => {
@@ -427,12 +445,21 @@ export default function PhaseView() {
 
                 {/* Toggle state (Supervisor only) */}
                 <Show when={isSupervisor() && !params.token_id}>
-                  <button
-                    onClick={handleTogglePhase}
-                    class="bg-[#1F1F23] border border-[#27272A] hover:bg-[#27272A] text-zinc-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-sm cursor-pointer transition-colors w-full text-center"
-                  >
-                    Toggle to {p().state === 'UAT' ? 'Complete' : 'UAT'}
-                  </button>
+                  <div class="flex gap-2 w-full">
+                    <button
+                      onClick={handleTogglePhase}
+                      class="bg-[#1F1F23] border border-[#27272A] hover:bg-[#27272A] text-zinc-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-sm cursor-pointer transition-colors flex-1 text-center"
+                    >
+                      Toggle to {p().state === 'UAT' ? 'Complete' : 'UAT'}
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      class="bg-[#1F1F23] border border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50 text-zinc-400 hover:text-red-400 text-[11px] font-medium px-3 py-2 rounded-sm cursor-pointer transition-colors text-center"
+                      title="Delete phase"
+                    >
+                      <Trash2 size={14} class="inline -mt-0.5" />
+                    </button>
+                  </div>
                 </Show>
               </div>
             </div>
@@ -499,6 +526,17 @@ export default function PhaseView() {
           </div>
         </div>
       </Show>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        open={showDeleteConfirm()}
+        title="Delete Phase"
+        message={`Are you sure you want to delete "${phase()?.name}"? This will permanently remove the phase and all its tasks.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeletePhase}
+        onClose={() => setShowDeleteConfirm(false)}
+        loading={deleting()}
+      />
     </div>
   );
 }
