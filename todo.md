@@ -62,3 +62,21 @@ done (reviewed): create a log history (just like a messaging conversation app) o
 
 fix (to review): In IssueList.tsx, put the unresolved issues at the top
 
+
+ftr: supervisor can advance-assign to developers
+ftr: project manager between supervisor and developer
+ftr: auto-assign to developers using AI
+ftr: calendar tab
+ftr: hierarchical project log use .md to generate a heading hierarchy, that is clickable
+ftr: daily task comments
+ftr: comment pagination
+ftr: add teams
+ftr: put checkbox for selected tasks, to mass approve from in-progress -> under review -> qa approved -> complete
+
+fix: daily email add project name
+fix: tag not working come on
+fix: issue scrolling
+fix: clickable urgency tasks
+fix: add name of the one who forwarded the issue or resolution (probably in actions)
+fix: issue with delete token
+
